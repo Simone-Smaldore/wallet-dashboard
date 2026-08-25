@@ -99,6 +99,98 @@ export function formatDay(iso: string): string {
     : `${weekday} ${day} ${MONTHS[month - 1]} ${year}`
 }
 
+/** The calendar block of `size` whole months that `iso` falls in.
+ *
+ * `size` is 1, 3 or 12 — a month, a quarter, a year — and the block is aligned
+ * to the calendar, not to today: asking for the year in August 2026 gives
+ * January to December 2026, and the quarter gives July to September.
+ *
+ * ⚠️ Aligned rather than rolling, and this is the whole point. "The last twelve
+ * months" is a window that means something different every time you open it, so
+ * two readings a week apart are not comparable and neither matches anything you
+ * would call a year out loud. A calendar year also lines up with the things
+ * that are actually annual — the insurance, the tax, the holidays — which is
+ * what makes one year worth putting next to another.
+ *
+ * Whole months rather than "ninety days" for the same reason: a quarter that
+ * started on the 14th would compare against a quarter starting on the 14th of
+ * another month, and no bill in anybody's life works that way.
+ */
+export function alignedSpan(iso: string, size: number): Period {
+  const [year, month] = parts(iso)
+  // 12 must be divisible by size, or the blocks would not tile the year.
+  const first = Math.floor((month - 1) / size) * size + 1
+  const start = toIso(year, first, 1)
+  return { start, end: monthOf(shiftMonth(start, size - 1)).end }
+}
+
+/** The label of a whole period: `marzo 2026`, `2026`, or `9 – 15 marzo 2026`.
+ *
+ * A month and a year say their name; anything else says its two ends, dropping
+ * what the two have in common so a week inside one month does not repeat the
+ * month twice.
+ */
+export function formatRange(period: Period): string {
+  const [fromYear, fromMonth, fromDay] = parts(period.start)
+  const [toYear, toMonth, toDay] = parts(period.end)
+
+  const month = monthOf(period.start)
+  if (month.start === period.start && month.end === period.end) {
+    return formatMonth(period.start)
+  }
+  if (fromMonth === 1 && fromDay === 1 && toMonth === 12 && toDay === 31 && fromYear === toYear) {
+    return String(fromYear)
+  }
+
+  if (fromYear === toYear && fromMonth === toMonth) {
+    return `${fromDay} – ${toDay} ${MONTHS[toMonth - 1]} ${toYear}`
+  }
+  if (fromYear === toYear) {
+    return `${fromDay} ${MONTHS[fromMonth - 1]} – ${toDay} ${MONTHS[toMonth - 1]} ${toYear}`
+  }
+  return `${fromDay} ${MONTHS[fromMonth - 1]} ${fromYear} – ${toDay} ${MONTHS[toMonth - 1]} ${toYear}`
+}
+
+/** `27 nov` — a day named in a sentence, where the weekday is noise.
+ *
+ * Used by the savings card, which says "from the salary of 27 nov to 26 dec":
+ * there the two dates are the ends of a stretch, not appointments. */
+export function formatDayShort(iso: string): string {
+  const [year, month, day] = parts(iso)
+  const sameYear = year === parts(today())[0]
+  const label = `${day} ${MONTHS[month - 1].slice(0, 3)}`
+  return sameYear ? label : `${label} ${year}`
+}
+
+/** `gennaio` — the month's name on its own, for a picker. */
+export function monthName(iso: string): string {
+  return MONTHS[parts(iso)[1] - 1]
+}
+
+/** `gen` — three letters, always, with no year attached.
+ *
+ * Distinct from `monthTick`, which puts the year on January because on a
+ * twelve-month axis that is the one tick where the reader needs to know the
+ * line has crossed into another year. In a list grouped by year that would be
+ * saying it twice. */
+export function monthAbbr(iso: string): string {
+  return MONTHS[parts(iso)[1] - 1].slice(0, 3)
+}
+
+export function yearOf(iso: string): number {
+  return parts(iso)[0]
+}
+
+/** `mar` — a month on a chart axis, where twelve full names would not fit.
+ *
+ * January carries its year: it is the only tick where the reader needs to know
+ * the line has crossed into another one. */
+export function monthTick(iso: string): string {
+  const [year, month] = parts(iso)
+  const short = MONTHS[month - 1].slice(0, 3)
+  return month === 1 ? `${short} ${String(year).slice(2)}` : short
+}
+
 export function shiftDays(iso: string, days: number): string {
   const [year, month, day] = parts(iso)
   const moved = new Date(year, month - 1, day + days)

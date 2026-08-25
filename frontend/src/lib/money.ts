@@ -34,6 +34,49 @@ export function formatMoney(cents: number, options: { symbol?: boolean } = {}): 
   return symbol ? `${text} €` : text
 }
 
+/** A short amount for a chart axis: `1,2k €`, `340 €`, `1,4M €`.
+ *
+ * Only ever for an axis or a tick. Every amount a person might check against
+ * their bank stays whole — a rounded number where an exact one is expected is
+ * the kind of thing that costs an afternoon.
+ */
+export function formatMoneyShort(cents: number): string {
+  const sign = cents < 0 ? '-' : ''
+  const euro = Math.abs(cents) / CENTS_PER_EURO
+
+  if (euro >= 1_000_000) return `${sign}${trim(euro / 1_000_000)}M €`
+  if (euro >= 1_000) return `${sign}${trim(euro / 1_000)}k €`
+  return `${sign}${Math.round(euro)} €`
+}
+
+function trim(value: number): string {
+  // One decimal, and no ",0" hanging off a round number.
+  return value.toFixed(1).replace(/\.0$/, '').replace('.', ',')
+}
+
+/** A share out of a thousand, as `34,2 %`.
+ *
+ * ⚠️ Per mille and not per cent all the way from the server, so the shares are
+ * integers that add up to exactly 1000. Dividing happens here, at the last
+ * step, like it does for money.
+ */
+export function formatShare(permille: number): string {
+  const text = (permille / 10).toFixed(1).replace(/\.0$/, '').replace('.', ',')
+  return `${text} %`
+}
+
+/** An amount with its sign always shown: `+1.200,00 €`, `−340,00 €`.
+ *
+ * For the numbers that are a *change* — a delta against last month, a month's
+ * savings — where "up or down" is the whole message. It uses the real minus
+ * sign, not a hyphen, so it lines up with the rest of the column.
+ */
+export function formatSigned(cents: number): string {
+  if (cents === 0) return formatMoney(0)
+  const value = formatMoney(Math.abs(cents))
+  return cents > 0 ? `+${value}` : `−${value}`
+}
+
 /** Turn what a person typed into cents.
  *
  * ⚠️ Deliberately not `parseFloat(text) * 100`. In binary floating point

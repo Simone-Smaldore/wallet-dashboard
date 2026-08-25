@@ -25,6 +25,12 @@ export type CategoryKind = (typeof CATEGORY_KINDS)[number]
 export const TRANSACTION_KINDS = ['expense', 'income', 'transfer'] as const
 export type TransactionKind = (typeof TRANSACTION_KINDS)[number]
 
+/* ⚠️ Ten, matching domain/vocabulary.CATEGORY_COLORS. The first six are the
+ * chart series and nothing else draws with more than those; the last four exist
+ * because a list of categories is easily a dozen and they have to be told apart
+ * at a glance. The two lists have to stay the same length: the server can assign
+ * a colour this file does not know, and the picker would then show nothing as
+ * selected. */
 export const CATEGORY_COLORS = [
   'chart-1',
   'chart-2',
@@ -32,6 +38,10 @@ export const CATEGORY_COLORS = [
   'chart-4',
   'chart-5',
   'chart-6',
+  'chart-7',
+  'chart-8',
+  'chart-9',
+  'chart-10',
 ] as const
 export type CategoryColor = (typeof CATEGORY_COLORS)[number]
 
@@ -126,6 +136,112 @@ export type ReconcileResult = {
   /** Null when the balance already matched and nothing was written. */
   transaction: Transaction | null
   new_balance_cents: number
+}
+
+export type Household = {
+  id: number
+  name: string
+  /** Null means no target set, which is not the same as a target of zero. */
+  monthly_savings_target_cents: number | null
+  /** Which income category is the salary. Null: not chosen yet. */
+  salary_category_id: number | null
+}
+
+/** One salary-to-salary stretch.
+ *
+ * ⚠️ The period a savings goal is judged on, and deliberately not the calendar
+ * month: money lands on a day that is not the first, and the question is
+ * whether one salary was still partly there when the next one arrived. */
+export type Cycle = {
+  start: string
+  /** For the open cycle this is today: nobody knows when the next salary lands. */
+  end: string
+  salary_cents: number
+  spent_cents: number
+  saved_cents: number
+  is_open: boolean
+}
+
+export type Savings = {
+  target_cents: number | null
+  salary_category_id: number | null
+  salary_category_name: string | null
+  /** The last cycle a new salary has already closed — the only one that can
+   *  carry a verdict. */
+  closed: Cycle | null
+  /** The one being lived. It gets an allowance instead. */
+  open: Cycle | null
+  /** Null, not false, when there is nothing to judge yet. */
+  met: boolean | null
+  /** What can still be spent this cycle and still hit the target. Negative
+   *  means the target is already out of reach. */
+  allowance_cents: number | null
+}
+
+export type Period = { start: string; end: string }
+
+/** ⚠️ Transfers and adjustments are in none of these. The rule lives in
+ *  backend/app/domain/stats.py and arrives already applied. */
+export type Totals = {
+  income_cents: number
+  expense_cents: number
+  savings_cents: number
+  /** Zero here means "nothing recorded", which the screen says in words. */
+  movement_count: number
+}
+
+export type CategorySlice = {
+  category_id: number | null
+  /** Already resolved server-side, "Senza categoria" included. */
+  name: string
+  color: string | null
+  icon: string | null
+  total_cents: number
+  /** Out of 1000, and they add up to exactly 1000. */
+  share_permille: number
+  previous_cents: number
+  delta_cents: number
+}
+
+export type MonthPoint = {
+  /** First day of the month. */
+  month: string
+  income_cents: number
+  expense_cents: number
+  savings_cents: number
+  /** Net worth at the **end** of this month, not the latest one repeated. */
+  net_worth_cents: number
+  movement_count: number
+}
+
+export type Pace = {
+  elapsed_days: number
+  total_days: number
+  spent_cents: number
+  daily_average_cents: number
+  /** ⚠️ A linear projection, not a forecast. The label has to say so. */
+  projection_cents: number
+}
+
+export type Summary = {
+  on: string
+  period: Period
+  net_worth_cents: number
+  accounts: Account[]
+  totals: Totals
+  savings: Savings
+  recent: Transaction[]
+}
+
+export type Analysis = {
+  period: Period
+  previous: Period
+  totals: Totals
+  previous_totals: Totals
+  by_category: CategorySlice[]
+  months: MonthPoint[]
+  top_expenses: Transaction[]
+  pace: Pace
 }
 
 export class ApiError extends Error {
@@ -228,7 +344,7 @@ export const api = {
     opening_balance_cents: number
     opening_date: string
     include_in_net_worth: boolean
-  }) => mutate<Account>('/api/accounts', 'POST', body, '/api/accounts'),
+  }) => mutate<Account>('/api/accounts', 'POST', body, '/api/accounts', '/api/stats'),
 
   updateAccount: (
     id: number,
@@ -241,7 +357,7 @@ export const api = {
       position: number
       is_archived: boolean
     }>,
-  ) => mutate<Account>(`/api/accounts/${id}`, 'PATCH', body, '/api/accounts'),
+  ) => mutate<Account>(`/api/accounts/${id}`, 'PATCH', body, '/api/accounts', '/api/stats'),
 
   /* ---- Categories ---- */
 
@@ -255,7 +371,7 @@ export const api = {
     kind: CategoryKind
     color?: CategoryColor
     icon?: string
-  }) => mutate<Category>('/api/categories', 'POST', body, '/api/categories'),
+  }) => mutate<Category>('/api/categories', 'POST', body, '/api/categories', '/api/stats'),
 
   updateCategory: (
     id: number,
@@ -266,7 +382,14 @@ export const api = {
       position: number
       is_archived: boolean
     }>,
-  ) => mutate<Category>(`/api/categories/${id}`, 'PATCH', body, '/api/categories'),
+  ) =>
+    mutate<Category>(
+      `/api/categories/${id}`,
+      'PATCH',
+      body,
+      '/api/categories',
+      '/api/stats',
+    ),
 
   /* ---- Transactions ---- */
 
@@ -290,6 +413,7 @@ export const api = {
       body,
       '/api/transactions',
       '/api/accounts',
+      '/api/stats',
       '/api/auth/me',
     ),
 
@@ -311,6 +435,7 @@ export const api = {
       body,
       '/api/transactions',
       '/api/accounts',
+      '/api/stats',
     ),
 
   deleteTransaction: (id: number) =>
@@ -320,7 +445,34 @@ export const api = {
       undefined,
       '/api/transactions',
       '/api/accounts',
+      '/api/stats',
     ),
+
+  /* ---- The dashboard ---- */
+
+  /** Everything the Riepilogo draws, in one round trip: the screen is opened
+   *  several times a day against a function that starts cold. */
+  summary: (on?: string) => request<Summary>(`/api/stats/summary${toQuery({ on })}`),
+
+  analysis: (range: { from?: string; to?: string } = {}) =>
+    request<Analysis>(`/api/stats/analysis${toQuery(range)}`),
+
+  /** The months that have something in them, so the period picker can offer
+   *  only the periods there is something to look at. */
+  calendar: () => request<{ months: string[] }>('/api/stats/calendar'),
+
+  /* ---- Household: the settings that belong to the money ---- */
+
+  household: () => request<Household>('/api/household'),
+
+  /** ⚠️ Sending null clears a field. Omitting it changes nothing. */
+  updateHousehold: (
+    body: Partial<{
+      monthly_savings_target_cents: number | null
+      salary_category_id: number | null
+    }>,
+  ) =>
+    mutate<Household>('/api/household', 'PATCH', body, '/api/household', '/api/stats'),
 
   reconcile: (accountId: number, balance_cents: number) =>
     mutate<ReconcileResult>(
@@ -329,6 +481,7 @@ export const api = {
       { balance_cents },
       '/api/transactions',
       '/api/accounts',
+      '/api/stats',
     ),
 }
 

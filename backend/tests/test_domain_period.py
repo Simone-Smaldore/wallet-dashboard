@@ -83,3 +83,28 @@ def test_months_between_is_empty_when_the_interval_is_backwards():
 def test_month_labels_are_italian_and_not_the_host_locale():
     assert format_month(date(2026, 3, 1)) == "marzo 2026"
     assert format_month(date(2026, 12, 31)) == "dicembre 2026"
+
+
+def test_a_quarter_compares_with_the_quarter_before():
+    """⚠️ Not "ninety-one days earlier".
+
+    April to June is 91 days; counting them back from 31 March reaches into the
+    previous December by a day and drops one off the other end. The numbers
+    would be wrong by a Tuesday and nothing on screen would say so.
+    """
+    q2 = Period(start=date(2026, 4, 1), end=date(2026, 6, 30))
+
+    assert previous_period(q2) == Period(start=date(2026, 1, 1), end=date(2026, 3, 31))
+
+
+def test_a_calendar_year_compares_with_the_year_before():
+    year = Period(start=date(2026, 1, 1), end=date(2026, 12, 31))
+
+    assert previous_period(year) == Period(start=date(2025, 1, 1), end=date(2025, 12, 31))
+
+
+def test_a_span_that_is_not_whole_months_falls_back_to_the_same_number_of_days():
+    """A free from–to has no calendar predecessor, so it gets the honest one."""
+    week = Period(start=date(2026, 3, 9), end=date(2026, 3, 15))
+
+    assert previous_period(week) == Period(start=date(2026, 3, 2), end=date(2026, 3, 8))

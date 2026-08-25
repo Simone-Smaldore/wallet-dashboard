@@ -73,15 +73,21 @@ def shift_month(day: date, months: int) -> date:
 def previous_period(period: Period) -> Period:
     """The period to compare against.
 
-    ⚠️ For a calendar month this is *the month before*, not "thirty days
-    earlier": comparing March with the 30 days ending in February would silently
-    drop a day of spending and nobody would ever notice.
+    ⚠️ For a run of **whole calendar months** this is the same number of months
+    before it: March compares with February, the second quarter with the first,
+    2026 with 2025. Not "ninety-one days earlier" — comparing April–June with
+    the 91 days ending 31 March would reach back into December by a day and
+    quietly drop one at the other end, and nobody would ever notice the numbers
+    were off by a Tuesday.
 
     For any other interval — a free from–to — it is the same number of days,
-    ending the day before this one starts.
+    ending the day before this one starts. There is nothing better available:
+    an arbitrary span has no calendar predecessor.
     """
-    if _is_whole_month(period):
-        return month_of(shift_month(period.start, -1))
+    months = _whole_months(period)
+    if months is not None:
+        start = shift_month(period.start, -months)
+        return Period(start, month_of(shift_month(start, months - 1)).end)
 
     end = period.start - timedelta(days=1)
     return Period(end - timedelta(days=period.days - 1), end)
@@ -114,5 +120,12 @@ def format_month(day: date) -> str:
     return f"{MONTHS[day.month - 1]} {day.year}"
 
 
-def _is_whole_month(period: Period) -> bool:
-    return period == month_of(period.start)
+def _whole_months(period: Period) -> int | None:
+    """How many whole calendar months the period is, or None if it is not.
+
+    Whole means it starts on a first and ends on a last: one month, a quarter,
+    a year, or any other run of them.
+    """
+    if period.start.day != 1 or period.end != month_of(period.end).end:
+        return None
+    return (period.end.year - period.start.year) * 12 + period.end.month - period.start.month + 1

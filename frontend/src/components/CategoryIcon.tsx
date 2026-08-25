@@ -183,13 +183,22 @@ export function categoryColorClasses(color: string) {
  * Round because DESIGN.md gives categories the round container and transfers
  * the square one — the shape itself says which of the two you are looking at.
  */
+const BOXES = {
+  /** For a row in a list: it must not be the tallest thing in it. */
+  sm: { box: 'size-9', glyph: 18 },
+  md: { box: 'size-10', glyph: 20 },
+} as const
+
 export function CategoryIcon({
   icon,
   color,
-  size = 20,
+  box = 'md',
+  size,
 }: {
   icon: string
   color: string
+  box?: keyof typeof BOXES
+  /** Override for the glyph alone; the container follows `box`. */
   size?: number
 }) {
   const Icon = CATEGORY_ICONS[icon] ?? Ellipsis
@@ -197,10 +206,10 @@ export function CategoryIcon({
 
   return (
     <span
-      className={`grid size-10 shrink-0 place-items-center rounded-pill ${tint} ${text}`}
+      className={`grid ${BOXES[box].box} shrink-0 place-items-center rounded-pill ${tint} ${text}`}
       aria-hidden
     >
-      <Icon size={size} strokeWidth={2} />
+      <Icon size={size ?? BOXES[box].glyph} strokeWidth={2} />
     </span>
   )
 }

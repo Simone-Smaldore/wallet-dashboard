@@ -42,7 +42,7 @@ export function Sheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-t-sheet border border-border-soft bg-bg-raise p-5 shadow-card sm:rounded-sheet"
+        className="relative max-h-[90vh] w-full max-w-[480px] overflow-y-auto rounded-t-sheet border border-border-soft bg-bg-raise p-4 shadow-card sm:rounded-sheet sm:p-5"
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="font-display text-heading text-ink-1">{title}</h2>

@@ -34,8 +34,8 @@ def list_accounts(user: CurrentUserDep, db: DbDep) -> AccountList:
         ).all()
     )
 
-    rows = _balance_rows(accounts)
-    movements = _movement_rows(db, user.household_id)
+    rows = balance_rows(accounts)
+    movements = movement_rows(db, user.household_id)
 
     totals = domain.balances(rows, movements)
     net_worth = domain.net_worth(rows, movements)
@@ -112,7 +112,7 @@ def update_account(
     db.refresh(account)
 
     totals = domain.balances(
-        _balance_rows([account]), _movement_rows(db, user.household_id)
+        balance_rows([account]), movement_rows(db, user.household_id)
     )
     return _to_schema(account, totals.get(account.id, account.opening_balance_cents))
 
@@ -138,8 +138,8 @@ def reconcile(
     account = get_owned(db, user.household_id, account_id)
     today = date.today()
 
-    movements = _movement_rows(db, user.household_id)
-    current = domain.balances(_balance_rows([account]), movements, as_of=today).get(
+    movements = movement_rows(db, user.household_id)
+    current = domain.balances(balance_rows([account]), movements, as_of=today).get(
         account.id, account.opening_balance_cents
     )
 
@@ -150,7 +150,7 @@ def reconcile(
         return ReconcileResult(
             difference_cents=0,
             transaction=None,
-            new_balance_cents=domain.balances(_balance_rows([account]), movements).get(
+            new_balance_cents=domain.balances(balance_rows([account]), movements).get(
                 account.id, account.opening_balance_cents
             ),
         )
@@ -173,7 +173,7 @@ def reconcile(
     from app.api.transactions import load_one
 
     updated = domain.balances(
-        _balance_rows([account]), _movement_rows(db, user.household_id)
+        balance_rows([account]), movement_rows(db, user.household_id)
     ).get(account.id, account.opening_balance_cents)
 
     return ReconcileResult(
@@ -212,7 +212,9 @@ def _refuse_duplicate(
         )
 
 
-def _balance_rows(accounts: list[Account]) -> list[domain.AccountRow]:
+def balance_rows(accounts: list[Account]) -> list[domain.AccountRow]:
+    """Shared with api/stats.py: one loader, so the dashboard and this screen
+    cannot end up with two different ideas of what an account is."""
     return [
         domain.AccountRow(
             id=account.id,
@@ -223,7 +225,7 @@ def _balance_rows(accounts: list[Account]) -> list[domain.AccountRow]:
     ]
 
 
-def _movement_rows(db: DbSession, household_id: int) -> list[domain.MovementRow]:
+def movement_rows(db: DbSession, household_id: int) -> list[domain.MovementRow]:
     """Every movement of the household, as plain values for the domain.
 
     Loading them all is fine at this scale — a year of real use is around 1.500
@@ -233,23 +235,29 @@ def _movement_rows(db: DbSession, household_id: int) -> list[domain.MovementRow]
     """
     rows = db.execute(
         select(
+            Transaction.id,
             Transaction.kind,
             Transaction.amount_cents,
             Transaction.account_id,
             Transaction.counter_account_id,
+            Transaction.category_id,
             Transaction.date,
+            Transaction.is_adjustment,
         ).where(Transaction.household_id == household_id)
     ).all()
 
     return [
         domain.MovementRow(
-            kind=TransactionKind(kind),
-            amount_cents=amount,
-            account_id=account_id,
-            counter_account_id=counter_account_id,
-            date=when,
+            id=row.id,
+            kind=TransactionKind(row.kind),
+            amount_cents=row.amount_cents,
+            account_id=row.account_id,
+            counter_account_id=row.counter_account_id,
+            category_id=row.category_id,
+            date=row.date,
+            is_adjustment=row.is_adjustment,
         )
-        for kind, amount, account_id, counter_account_id, when in rows
+        for row in rows
     ]
 
 

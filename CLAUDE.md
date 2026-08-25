@@ -1,15 +1,15 @@
 # CLAUDE.md
 
-> Stato: **M0, M1, M2 e M3 fatte.** Si entra con un magic link, ci sono conti e categorie,
-> e si registrano movimenti: uscite, entrate e trasferimenti, con l'elenco filtrabile e la
-> riconciliazione dei saldi. Ci sono `backup` e `restore`. Manca **M4, riepilogo e
-> analisi** — i grafici e l'obiettivo di risparmio — e poi la V1 è chiusa.
+> Stato: **M0, M1, M2, M3 e M4 fatte — il prodotto della V1 è completo.** Si entra con un
+> magic link, ci sono conti e categorie, si registrano movimenti (uscite, entrate e
+> trasferimenti) con elenco filtrabile e riconciliazione dei saldi, e ci sono il riepilogo,
+> i grafici e l'obiettivo di risparmio. Ci sono `backup` e `restore`. Manca **M5**, che non
+> è prodotto: PWA installabile e i restanti script di manutenzione.
 >
 > Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
-> **i motivi per cui sono state prese così**. Buona parte di ciò che c'è scritto sono
-> ancora vincoli per il codice che verrà, non descrizioni di codice che c'è: dove una regola
-> parla di un file che non esiste (`domain/stats.py`, `lib/money.ts`) sta dicendo *dove
-> quella cosa dovrà stare*.
+> **i motivi per cui sono state prese così**. Ormai quasi tutto quello che c'è scritto
+> descrive codice che esiste; dove una regola parla di un file che non c'è ancora sta
+> dicendo *dove quella cosa dovrà stare*.
 >
 > Il piano in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md) descrive le intenzioni e le
 > milestone; questo file descrive le regole. Quando il codice comincerà a esistere, questo
@@ -148,8 +148,9 @@ backend/tests/          pytest, concentrati su domain/
 frontend/src/features/  una cartella per area: dashboard, transactions, accounts,
                         categories, settings
 frontend/src/api/       client tipizzato verso il backend + cache delle letture
-frontend/src/lib/       helper trasversali (money.ts, period.ts, validation.ts,
-                        online.ts, pwa.ts)
+frontend/src/lib/       helper trasversali (money.ts, period.ts, chart.ts,
+                        validation.ts, online.ts, pwa.ts)
+frontend/src/components/charts/   i grafici: Recharts spogliata, e il tooltip scritto
 frontend/src/styles/    tokens.css (design system) + index.css
 frontend/public/        asset serviti tali e quali: icone, manifest, sw.js
 api/index.py            entrypoint Vercel, monta l'app FastAPI
@@ -379,6 +380,21 @@ cui poggia ogni numero mostrato:
 | Saldo di un conto | tutto ciò che tocca quel conto, rettifiche comprese | niente |
 | Patrimonio | somma dei saldi dei conti con `include_in_net_worth` | niente |
 
+⚠️ **Questa tabella è `backend/app/domain/stats.py`**, e non è una parafrasi: le due
+funzioni `is_spend` e `is_income` in cima al modulo sono la regola, e ogni numero mostrato
+dai due cruscotti esce da lì. `api/stats.py` carica i movimenti una volta e non decide
+niente. Il patrimonio a fine mese lo calcola **chiamando** `balances.net_worth(as_of=…)`,
+non risommando: una formula, un posto.
+
+⚠️ **Le percentuali viaggiano in millesimi interi** (`share_permille`, 0–1000) e la
+divisione avviene nel formattatore, come per i soldi. Il resto va sull'ultima fetta con
+qualcosa dentro, così le quote sommano esattamente a 1000: fette che fanno 99,7 % accanto a
+un grafico si vedono.
+
+⚠️ **Ogni risposta porta un conteggio dei movimenti**, non solo i totali. È quello che
+permette allo schermo di distinguere "non hai speso niente" da "non hai registrato niente",
+e la seconda si scrive a parole.
+
 ⚠️ **Le aggregazioni si fanno in Python, non in SQL**, e questa è una scelta di scala
 dichiarata. Il vincolo architetturale del progetto è che `domain/` non importi nulla di
 SQLAlchemy: il router carica i movimenti del periodo, `domain/stats.py` li somma. Un anno di
@@ -410,9 +426,18 @@ vincoli d'uso:
   somigliare al design system, non il contrario.
 
 **Cosa mostra la V1** (dettaglio e motivazioni in `docs/plan/plan-v1.md`): saldi per conto
-con totale e ultimi movimenti, uscite per categoria nel periodo, andamento
-entrate/uscite/differenza mese per mese, patrimonio a fine mese, confronto col mese
+con totale e ultimi movimenti, uscite per categoria nel periodo (anello + elenco), andamento
+entrate/uscite/differenza mese per mese, patrimonio a fine mese, confronto col periodo
 precedente, le cinque uscite più grandi, spesa media giornaliera con proiezione a fine mese.
+
+⚠️ **I periodi dell'analisi sono solari e sono solo quelli che hanno dati.** L'anno è
+gennaio–dicembre e il trimestre è uno dei quattro fissi, non "gli ultimi dodici o tre mesi":
+una finestra mobile vuol dire una cosa diversa ogni volta che la apri, e due letture a una
+settimana di distanza non sono confrontabili. E il selettore offre **solo i periodi in cui
+hai registrato qualcosa** (`GET /api/stats/calendar`): proporre marzo 2019 e poi spiegare
+sette volte che non c'è niente fa sembrare rotta la schermata. L'unico posto in cui un
+periodo vuoto si può scegliere è l'intervallo libero da–a, perché quelle due date le hai
+scritte tu.
 
 ⚠️ **Ogni grafico è un punto di partenza, non un quadro.** Da una fetta della torta si deve
 poter scendere ai movimenti che la compongono: un numero che non si può aprire è un numero di
@@ -608,8 +633,44 @@ il conto preselezionato, la valuta: sono proprietà dell'**household**, non dell
 `preferences` è personale, e il giorno in cui l'app diventa condivisa una preferenza personale
 non deve poter cambiare i numeri che vede l'altro.
 
-**L'obiettivo di risparmio** è un campo su `household` (`monthly_savings_target_cents`), non
-una tabella: c'è un valore solo e i mesi passati si confrontano con quello corrente. È una
+**L'obiettivo di risparmio** è un campo su `household` (`monthly_savings_target_cents`),
+letto e scritto da `GET` / `PATCH /api/household` — che è anche dove finiranno il conto
+preselezionato e la valuta. ⚠️ **`null` vuol dire "non me lo sono dato", e non è zero**: un
+obiettivo a zero mostrerebbe una barra piena per il motivo sbagliato, e un'app che si
+inventa un obiettivo che non hai scelto ha cominciato a dare consigli. Si modifica dal
+Riepilogo, dove lo guardi, non da un pannello di impostazioni: un obiettivo si tara
+guardando i mesi che hai avuto davvero.
+
+Non è una tabella: c'è un valore solo e i periodi passati si confrontano con quello corrente.
+
+### ⚠️ Il ciclo dello stipendio
+
+**L'obiettivo non si giudica sul mese solare, si giudica da uno stipendio al successivo.**
+I soldi arrivano il 27, non il primo, e la domanda vera è se lo stipendio di novembre era
+ancora lì quando è arrivato quello di dicembre. Il confine del mese taglia quella tratta a
+metà e risponde a una domanda che nessuno ha fatto.
+
+- **Un ciclo parte dal primo stipendio di ogni mese solare**; altri pagamenti dello stesso
+  mese si **sommano** a quel ciclo. È ciò che impedisce alla tredicesima di spezzare
+  dicembre in due cicli, uno dei quali lungo cinque giorni con sopra un verdetto sul
+  risparmio.
+- **Uno stipendio è un'entrata nella categoria che hai indicato tu**
+  (`household.salary_category_id`). ⚠️ Non "una qualsiasi entrata" — un rimborso da 10 €
+  aprirebbe un ciclo — e non "l'entrata più grande del mese", che è una regola che indovina
+  e che il mese in cui vendi qualcosa di costoso sposta i confini senza dirtelo. Se non
+  l'hai scelta, la schermata te lo chiede invece di supporre.
+- **Il verdetto è sul ciclo chiuso**, quello che un nuovo stipendio ha già terminato: è
+  l'unica tratta la cui spesa è finita. Obiettivo raggiunto se
+  `stipendio − speso ≥ obiettivo`.
+- **Il ciclo in corso non ha un verdetto, ha un residuo**: `stipendio − speso − obiettivo`,
+  cioè quanto puoi ancora spendere prima del prossimo stipendio. È l'unico numero della
+  dashboard su cui puoi ancora agire. Negativo vuol dire che l'obiettivo è già fuori
+  portata, e si mostra quanto.
+- ⚠️ **La fine del ciclo in corso è oggi**, perché nessuno sa quando arriva il prossimo
+  stipendio. È l'unico confine onesto disponibile, ed è anche il motivo per cui quel ciclo
+  non può avere un verdetto.
+- **Quello che spendi prima del primo stipendio in assoluto non sta in nessun ciclo**: non
+  c'è uno stipendio da cui sia uscito, quindi non c'è niente contro cui giudicarlo. È una
 semplificazione consapevole — se un giorno servirà la storia dell'obiettivo diventa una
 tabella con `valid_from`, e i mesi passati smetteranno di cambiare valutazione ogni volta che
 alzi l'asticella.

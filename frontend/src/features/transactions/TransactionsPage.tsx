@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { useSearchParams } from 'react-router'
 
 import { useQuery } from '../../api/cache'
 import {
@@ -14,7 +15,7 @@ import { Card } from '../../components/Card'
 import { Dropdown } from '../../components/Dropdown'
 import { IconButton } from '../../components/IconButton'
 import { EmptyState } from '../../components/EmptyState'
-import { formatDay, formatMonth, monthOf, shiftMonth, today } from '../../lib/period'
+import { formatDay, formatRange, monthOf, shiftMonth, today } from '../../lib/period'
 import { formatMoney } from '../../lib/money'
 import { TransactionRow } from './TransactionRow'
 import { TransactionSheet } from './TransactionSheet'
@@ -26,14 +27,45 @@ import { TransactionSheet } from './TransactionSheet'
  * free out of rows already on screen.
  */
 export function TransactionsPage() {
-  const [month, setMonth] = useState(() => today())
-  const [kind, setKind] = useState<TransactionKind | ''>('')
-  const [accountId, setAccountId] = useState<number | ''>('')
-  const [categoryId, setCategoryId] = useState<number | ''>('')
-  const [search, setSearch] = useState('')
+  // The filters live in the URL rather than in component state.
+  //
+  // ⚠️ That is what makes a chart openable: the Analisi screen links here with
+  // the exact period and category a number was computed from, and the answer to
+  // "and where does that come from?" becomes a page you can also reload, share
+  // and step back out of.
+  const [params, setParams] = useSearchParams()
+
+  const period = {
+    start: params.get('from') ?? monthOf(today()).start,
+    end: params.get('to') ?? monthOf(today()).end,
+  }
+  const kind = (params.get('kind') ?? '') as TransactionKind | ''
+  const accountId = numberParam(params.get('account_id'))
+  const categoryId = numberParam(params.get('category_id'))
+  const search = params.get('q') ?? ''
+
   const [editing, setEditing] = useState<Transaction | null>(null)
 
-  const period = monthOf(month)
+  /** Change one filter and leave the others alone.
+   *
+   * `replace` on purpose: every keystroke in the search box would otherwise be
+   * a history entry, and the back button would undo six chips instead of
+   * leaving the screen. */
+  function setFilter(name: string, value: string | number | null) {
+    const next = new URLSearchParams(params)
+    if (value === null || value === '') next.delete(name)
+    else next.set(name, String(value))
+    setParams(next, { replace: true })
+  }
+
+  function setMonthPeriod(anchor: string) {
+    const span = monthOf(anchor)
+    const next = new URLSearchParams(params)
+    next.set('from', span.start)
+    next.set('to', span.end)
+    setParams(next, { replace: true })
+  }
+
   const filters: TransactionFilters = {
     from: period.start,
     to: period.end,
@@ -87,15 +119,17 @@ export function TransactionsPage() {
       <div className="flex items-center justify-between gap-2">
         <IconButton
           label="Mese precedente"
-          onClick={() => setMonth(shiftMonth(month, -1))}
+          onClick={() => setMonthPeriod(shiftMonth(period.start, -1))}
           Icon={ChevronLeft}
           size="md"
           iconSize={20}
         />
-        <p className="text-body text-ink-1">{formatMonth(month)}</p>
+        {/* formatRange, not formatMonth: arriving from a chart the period can
+            be any two dates, and the heading has to say which. */}
+        <p className="text-body text-ink-1">{formatRange(period)}</p>
         <IconButton
           label="Mese successivo"
-          onClick={() => setMonth(shiftMonth(month, 1))}
+          onClick={() => setMonthPeriod(shiftMonth(period.start, 1))}
           Icon={ChevronRight}
           size="md"
           iconSize={20}
@@ -113,18 +147,18 @@ export function TransactionsPage() {
           <input
             type="text"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => setFilter('q', event.target.value)}
             placeholder="Cerca nella descrizione"
             aria-label="Cerca"
             className="min-h-11 w-full rounded-control border border-border-soft bg-surface-input py-2 pl-10 pr-4 text-body text-ink-1 placeholder:text-ink-3 focus:border-border-focus focus:outline-none"
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Chips
             label="Tutti"
             value={kind}
-            onChange={setKind}
+            onChange={(value) => setFilter('kind', value)}
             options={[
               { value: 'expense', label: 'Uscite' },
               { value: 'income', label: 'Entrate' },
@@ -134,7 +168,7 @@ export function TransactionsPage() {
           <Dropdown
             placeholder="Scegli conto"
             value={accountId === '' ? null : accountId}
-            onChange={(id) => setAccountId(id ?? '')}
+            onChange={(id) => setFilter('account_id', id)}
             groups={[
               {
                 label: 'Conti',
@@ -150,9 +184,26 @@ export function TransactionsPage() {
           <Dropdown
             placeholder="Scegli categoria"
             value={categoryId === '' ? null : categoryId}
-            onChange={(id) => setCategoryId(id ?? '')}
+            onChange={(id) => setFilter('category_id', id)}
             groups={categoryGroups(categories.data ?? [])}
           />
+
+          {/* Arriving from a chart lands here already filtered. Without a way
+              back out, the list looks like it has lost most of its rows. */}
+          {kind || accountId || categoryId || search ? (
+            <button
+              type="button"
+              onClick={() =>
+                setParams(new URLSearchParams({ from: period.start, to: period.end }), {
+                  replace: true,
+                })
+              }
+              className="flex min-h-9 items-center gap-1.5 rounded-pill border border-border-soft px-3 text-caption text-ink-2 transition-colors duration-200 hover:bg-surface-hover hover:text-ink-1"
+            >
+              <X size={14} strokeWidth={2} aria-hidden />
+              Togli i filtri
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -166,6 +217,12 @@ export function TransactionsPage() {
         </EmptyState>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* A card per day, heading outside it.
+              ⚠️ Tried the other way — one card for the whole list with the days
+              as bands inside — and it is denser and looks worse: the days stop
+              reading as separate things, which is the entire reason the list is
+              grouped. Density is not the goal here; the goal is finding
+              Tuesday. */}
           {days.map(({ day, rows, spent }) => (
             <div key={day} className="flex flex-col gap-2">
               <div className="flex items-baseline justify-between gap-3 px-1">
@@ -174,8 +231,11 @@ export function TransactionsPage() {
                   <p className="num text-caption text-ink-3">−{formatMoney(spent)}</p>
                 ) : null}
               </div>
-              <Card className="p-0">
-                <ul className="divide-y divide-border-soft">
+              <Card padding="list">
+                {/* Rounded to 12 inside a card rounded to 16 with 4 of padding:
+                    that is the radius the corner actually needs, and it keeps a
+                    row's hover from squaring off against the card. */}
+                <ul className="overflow-hidden rounded-control divide-y divide-border-soft">
                   {rows.map((movement) => (
                     <TransactionRow
                       key={movement.id}
@@ -203,6 +263,12 @@ export function TransactionsPage() {
       ) : null}
     </div>
   )
+}
+
+/** A query-string id, or nothing. A hand-edited URL is not a crash. */
+function numberParam(value: string | null): number | '' {
+  const parsed = Number(value)
+  return value && Number.isFinite(parsed) ? parsed : ''
 }
 
 type Day = { day: string; rows: Transaction[]; spent: number }

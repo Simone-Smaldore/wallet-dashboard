@@ -29,13 +29,29 @@ class AccountRow:
 
 @dataclass(frozen=True)
 class MovementRow:
-    """Only what a balance needs to know about a movement."""
+    """What the domain knows about a movement.
+
+    ⚠️ One row type for the whole domain, not one per module. `stats.py` reads
+    the same object this file does, so the router loads the movements once and
+    both halves of the domain agree on what a movement is. Two shapes would mean
+    two loaders, and eventually two answers to "was this an adjustment?".
+
+    The trailing fields are unused by the balance on purpose: a balance counts
+    everything that touches the account, adjustments and uncategorised rows
+    included. They are here because statistics cannot say the same.
+    """
 
     kind: TransactionKind
     amount_cents: int
     account_id: int
     date: Date
     counter_account_id: int | None = None
+    category_id: int | None = None
+    is_adjustment: bool = False
+    #: Only the statistics use it, and only to say *which* movements make up a
+    #: number — the five largest spends of a month. Last and optional so the
+    #: tests that only care about arithmetic can leave it out.
+    id: int | None = None
 
 
 def balances(

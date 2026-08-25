@@ -214,6 +214,38 @@ def _to_schema(row) -> TransactionOut:
     )
 
 
+def load_recent(db: DbSession, household_id: int, *, limit: int = 5) -> list[TransactionOut]:
+    """The last few movements, newest first — what the Riepilogo shows.
+
+    Same order as the list: by date and then by id, so "last" means the same
+    thing on both screens even when several rows share a day.
+    """
+    rows = db.execute(
+        _select_rows(household_id)
+        .order_by(Transaction.date.desc(), Transaction.id.desc())
+        .limit(limit)
+    ).all()
+    return [_to_schema(row) for row in rows]
+
+
+def load_by_ids(
+    db: DbSession, household_id: int, ids: list[int]
+) -> list[TransactionOut]:
+    """Full rows for ids the domain picked, keeping the order it picked them in.
+
+    ⚠️ The *choosing* stays in domain/stats.py — which movements are the biggest
+    spends of a period is a rule about what counts as a spend, and restating it
+    as a WHERE clause here would be the second definition this project spends so
+    much effort not having. This only fetches.
+    """
+    if not ids:
+        return []
+
+    rows = db.execute(_select_rows(household_id).where(Transaction.id.in_(ids))).all()
+    found = {row[0].id: _to_schema(row) for row in rows}
+    return [found[movement_id] for movement_id in ids if movement_id in found]
+
+
 def load_one(db: DbSession, household_id: int, transaction_id: int) -> TransactionOut:
     return _load(db, household_id, transaction_id)
 

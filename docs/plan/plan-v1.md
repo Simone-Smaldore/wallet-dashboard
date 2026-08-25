@@ -487,8 +487,64 @@ Due decisioni prese in corsa:
 - **I movimenti si cancellano**, non si archiviano: un movimento sbagliato non è storia, è
   un errore di battitura.
 
-**M4 — Riepilogo e analisi. ← fine V1.** I grafici (elenco sotto), l'obiettivo di risparmio del
-mese, il passaggio da un grafico ai movimenti che lo compongono.
+**M4 — Riepilogo e analisi. ✅ fatto — il prodotto della V1 è chiuso.** Il riepilogo con
+patrimonio, saldi, totali del mese e obiettivo di risparmio; l'analisi con uscite per
+categoria, andamento mensile, patrimonio nel tempo, le uscite più grandi e il ritmo di
+spesa; e il passaggio da ogni numero ai movimenti che lo compongono.
+
+Il pezzo che conta è `backend/app/domain/stats.py`: la tabella "cosa entra in cosa" di
+`CLAUDE.md` è diventata due funzioni, `is_spend` e `is_income`, e ogni numero dei due
+cruscotti esce da lì. `api/stats.py` carica i movimenti una volta e non decide niente. Il
+test intoccabile ha adesso la sua seconda metà — `balances` dimostra che un trasferimento
+non può *muovere* un totale, `stats` che non può *comparire* in uno.
+
+Sei scostamenti dal piano, tutti scoperti costruendo:
+
+- ⚠️ **Le uscite per categoria non usano Recharts.** Ogni riga deve portare nome, importo,
+  quota e variazione e restare leggibile a 390px: è un elenco con dentro una barra, non un
+  grafico, e con la libreria la prima cosa a essere troncata sarebbero le etichette.
+  Recharts resta per le due serie temporali, che è dove serve davvero.
+- ⚠️ **La schermata Analisi si carica a parte.** Recharts pesa 120 kB gzippati, più di tutta
+  l'app prima di lei, e serve a una rotta sola. Compilata dentro, quel peso sarebbe finito
+  anche sulla schermata di inserimento — quella che si usa in piedi alla cassa, dove la
+  priorità del prodotto è che registrare una spesa costi tre tocchi e nessuna attesa. I
+  grafici si guardano una volta al mese, dal divano, e possono permettersi di scaricarsi.
+- **Un endpoint per schermata, non uno per grafico.** Il Riepilogo si apre più volte al
+  giorno contro una function che parte fredda, e i numeri di una schermata sono viste sugli
+  stessi movimenti, che il server ha già in mano.
+- ⚠️ **I filtri dei Movimenti sono passati nella query string.** È la condizione perché un
+  grafico si possa aprire: da una fetta si arriva all'elenco con lo stesso periodo e la
+  stessa categoria con cui il numero è stato calcolato, e la risposta a "e da dove esce?"
+  diventa una pagina che si può ricaricare, condividere e da cui si torna indietro.
+- **L'obiettivo di risparmio si modifica dal Riepilogo**, non dal profilo: si tara guardando
+  i mesi che hai avuto davvero, quindi sta dove li guardi. `null` significa "non me lo sono
+  dato" e non zero — un obiettivo a zero mostrerebbe una barra piena per il motivo
+  sbagliato.
+- **Le quote sono interi in millesimi**, come gli importi sono interi in centesimi, e il
+  resto va sull'ultima fetta con qualcosa dentro: fette che sommano a 99,7 % accanto a un
+  grafico si vedono a occhio.
+
+Dopo i primi giorni d'uso reale, tre cose sono cambiate:
+
+- ⚠️ **L'obiettivo di risparmio si giudica da uno stipendio al successivo**, non sul mese
+  solare. I soldi arrivano il 27 e la domanda è se lo stipendio di novembre c'era ancora
+  quando è arrivato quello di dicembre; il primo del mese taglia quella tratta a metà. Il
+  verdetto sta sul ciclo chiuso — l'unico la cui spesa è finita — e il ciclo in corso
+  mostra invece **quanto si può ancora spendere**, che è l'unico numero su cui si può
+  ancora agire. Dettaglio delle regole in `CLAUDE.md`.
+- ⚠️ **Anno e trimestre sono solari**, non finestre mobili di 12 o 3 mesi: una finestra
+  mobile vuol dire una cosa diversa ogni volta che la apri, e "l'anno" detto a voce non ha
+  mai significato "da agosto scorso". Di conseguenza anche `previous_period` confronta un
+  qualsiasi periodo fatto di **mesi interi** con lo stesso numero di mesi prima.
+- ⚠️ **Il selettore offre solo i periodi che hanno dati** (`/api/stats/calendar`), e le
+  frecce si fermano ai bordi. Sette grafici vuoti che spiegano ognuno che non c'è niente
+  fanno sembrare rotta la schermata; l'unica eccezione è l'intervallo libero, dove le due
+  date le hai scritte tu. Accanto alle frecce c'è una combobox: tornare a febbraio 2020 non
+  può costare settantadue clic.
+
+Sistemata anche una divergenza lasciata da M3: `frontend/src/api/client.ts` conosceva sei
+colori di categoria e il backend dieci, quindi il selettore ne offriva sei e il colore
+assegnato dal server poteva essere uno che il form non sapeva mostrare come selezionato.
 
 **M5 — PWA e manutenzione.** Installabile e a schermo pieno, service worker per la sola shell,
 fascia "sei senza rete". Più `doctor`, `prune`, `reset`, `users`, `merge_categories`,

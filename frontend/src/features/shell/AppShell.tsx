@@ -47,7 +47,11 @@ export function AppShell() {
           top padding clears the header and the bottom one the tab bar with the
           button floating above it. */}
       <main className="pb-28 pt-20 sm:ml-[212px] sm:pb-12 sm:pt-10">
-        <div className="mx-auto w-full max-w-[900px] px-4 sm:px-8">
+        {/* ⚠️ Twelve on a phone, not sixteen. On 390px every pixel of margin
+            is a pixel the name of a movement does not get, and the names were
+            being truncated with empty space next to them. Desktop keeps its
+            room: there the width is not scarce. */}
+        <div className="mx-auto w-full max-w-[900px] px-3 sm:px-8">
           <Outlet />
         </div>
       </main>

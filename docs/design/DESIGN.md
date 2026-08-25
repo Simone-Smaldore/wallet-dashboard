@@ -87,8 +87,14 @@ Scala mobile-first:
 
 ## Forme, spaziatura, elevazione
 
-- Spaziatura: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48. Margine pagina 16, padding card
-  16, gap fra card 12. Target tattile minimo 44px. Tab bar 64, FAB 56.
+- Spaziatura: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48. Gap fra card 12. Target tattile
+  minimo 44px. Tab bar 64, FAB 56.
+- ⚠️ **I margini si stringono sul telefono, non sul desktop.** Margine pagina **12** da
+  mobile e 32 da `sm`; padding card **16** da mobile e 20 da `sm`. Venti ovunque stava bene
+  in un mock da desktop e su 390px mangiava un decimo della larghezza: fra margine pagina,
+  bordo della card e padding della riga, il nome di un movimento cominciava a 32 px dal
+  bordo e veniva troncato con dello spazio vuoto accanto. Sul desktop la larghezza non è
+  scarsa e i margini restano larghi.
 - Raggi: card 16, controlli 12, chip/pillole 999, sheet 24 in alto.
 - Card: `--surface-card` + bordo 1px `--border-soft` + `--shadow-card` (ombra profonda +
   filo interno chiaro). Mai bordi colorati solo a sinistra.
@@ -117,6 +123,60 @@ Scala mobile-first:
 - Niente emoji, niente unicode come icone, niente SVG disegnati a mano.
 - **Nessun logo**: wordmark tipografico "Wallet." in Space Grotesk 600, punto finale in
   `--accent`.
+
+## I grafici (M4)
+
+- **La cornice è un componente**, `charts/ChartFrame`: titolo, una nota a destra, e **il
+  caso vuoto**. ⚠️ Il vuoto vive lì e non in sette posti: un grafico con gli assi a zero si
+  legge come "hai speso zero", che è un'altra affermazione, e sette componenti che ci
+  provano ognuno per conto suo sbagliano prima o poi.
+- **Il tooltip è scritto, non ristilizzato.** Quello di Recharts è un rettangolo bianco con
+  un bordo; passargli `contentStyle` significa scrivere in linea cose che i token dicono
+  già. `charts/MoneyTooltip` è una card come le altre, e gli importi passano da
+  `formatMoney`.
+- **Assi senza linea e senza tacche**, etichette 11px in `--chart-axis`, griglia solo
+  orizzontale in `--chart-grid`. `lib/chart.ts` è **l'unico posto del frontend che nomina un
+  colore per un grafico**.
+- ⚠️ **Le uscite per categoria non sono un grafico di libreria, sono un elenco con dentro
+  una barra.** Ogni riga porta nome, importo, quota e variazione, e deve restare leggibile a
+  390px: Recharts qui sarebbe una libreria combattuta, e la prima cosa che troncherebbe
+  sono le etichette.
+- ⚠️ **La torta è un anello, sei fette e poi "Altro".** Il buco al centro tiene il totale,
+  che è il numero di cui le fette sono una proporzione: scriverlo fuori dal grafico
+  obbligherebbe a guardare in due posti. Oltre le sei fette la coda si raggruppa, che è la
+  regola già scritta qui — non ci si inventano tinte.
+  ⚠️ Ogni fetta però prende **il colore della sua categoria**, anche quando è il settimo o
+  il decimo della palette, ed è una lettura deliberata della regola "i grafici usano solo le
+  prime sei serie": quella regola esiste perché i colori distinguibili finiscono, e usare il
+  colore che quella categoria ha già nell'icona e nell'elenco è più leggibile, non meno. Due
+  categorie possono avere lo stesso colore, ed è per questo che **l'elenco sotto è la
+  legenda** — anello e barre stanno nella stessa cornice, non in due card che dicono la
+  stessa cosa due volte.
+- ⚠️ **La variazione rispetto al periodo prima è in inchiostro neutro**, non rossa né verde.
+  Spendere 120 € in più in trasporti è un fatto; se sia una brutta notizia non lo decide
+  l'app.
+- ⚠️ **Ogni numero si apre.** Una fetta, una barra di un mese, un totale portano all'elenco
+  dei movimenti **con i filtri nell'URL** — stesso periodo, stessa categoria da cui il
+  numero è nato. Perciò i filtri di Movimenti vivono nella query string e non nello stato
+  del componente: è ciò che rende la risposta a "e da dove esce?" una pagina che si può
+  anche ricaricare e da cui si torna indietro.
+- **Il patrimonio non parte da zero** sull'asse: quel grafico risponde a "sta salendo?", e
+  una scala da zero appiattirebbe un anno di risparmio in una riga dritta. È l'unico posto
+  in cui la forma conta più della grandezza — ogni altro numero è mostrato intero, in euro.
+
+## L'obiettivo di risparmio (M4)
+
+- ⚠️ **Il verdetto è una parola, non una barra**: "Obiettivo raggiunto" in verde o
+  "Obiettivo mancato" in rosso, sul ciclo che un nuovo stipendio ha già chiuso. Una barra
+  su una tratta finita non dice niente di più di una parola, e occupa dieci volte lo
+  spazio.
+- ⚠️ **Il numero grande è quanto puoi ancora spendere**, non quanto hai risparmiato: è
+  l'unico numero della schermata su cui puoi ancora agire. Taglia `hero`, e sotto la barra
+  si riempie con lo speso rispetto allo spendibile (stipendio meno obiettivo) — quindi
+  "piena" vuol dire "sei alla riga", non "bravo".
+- ⚠️ **Tre stati vuoti diversi, tre frasi diverse**: manca l'obiettivo, manca la categoria
+  dello stipendio, manca il secondo stipendio. Una barra a zero sarebbe la stessa immagine
+  per tutti e tre e vera per nessuno.
 
 ## Tono di voce
 
@@ -149,6 +209,17 @@ mai un grafico a zero. Etichette oneste ("proiezione lineare", non "previsione")
   totale **delle sole uscite** di quel giorno. Ripetere la stessa data su sei righe di fila
   è rumore; e sommare trasferimenti o rettifiche in quel totale farebbe sembrare peggiore
   una giornata proprio nel numero che si guarda di sfuggita.
+- ⚠️ **Una card per giorno, con l'intestazione fuori.** Provata anche la versione compatta
+  — una card sola per tutto l'elenco e i giorni come fasce dentro — ed è più densa e più
+  brutta: i giorni smettono di leggersi come cose separate, che è tutto il motivo per cui
+  l'elenco è raggruppato. Qui la densità non è l'obiettivo; l'obiettivo è trovare martedì.
+- ⚠️ **Nella riga di un movimento l'aria non è il padding, è l'interlinea.** La scala dà
+  body 15/22 e caption 13/18: due righe di testo sono 40 px per circa 28 px di lettere, e
+  quei dodici il padding non li tocca — è il motivo per cui stringere il padding accorcia
+  poco e imbruttisce molto. Quindi **le due righe qui vanno strette, 20 e 16**, il padding
+  resta a dodici, e il badge scende a 36 px perché altrimenti diventa lui la cosa più alta
+  della riga e il guadagno svanisce. È l'unico posto dell'app che si scosta dalla scala
+  tipografica, ed è perché è l'unico dove due righe di testo sono un oggetto solo.
 - Un movimento con data futura porta l'etichetta `futuro`: conta nel saldo, e quando il
   saldo non torna con la banca è la riga che lo spiega.
 - ⚠️ **Un selettore a due vie non è una struttura.** Conti e Categorie ci sono passati per
