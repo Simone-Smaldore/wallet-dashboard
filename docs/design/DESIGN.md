@@ -114,8 +114,16 @@ mai un grafico a zero. Etichette oneste ("proiezione lineare", non "previsione")
 ## Layout e navigazione
 
 - Mobile-first, riferimento 390px. Quattro sezioni: Riepilogo, Movimenti, Conti, Analisi.
-- Tab bar fissa in basso con **FAB + centrale**: il posto fisso dell'inserimento, l'unica
-  azione che ne ha diritto. Su desktop: sidebar con profilo in fondo.
+- ⚠️ **Rivisto in M1: cinque schede e il FAB flottante, non quattro col FAB al centro.**
+  Il profilo su telefono non aveva una strada, e il disegno originale non lo diceva: gli è
+  stata data la quinta scheda. Con cinque schede il centro non esiste più, quindi il
+  bottone **+** si stacca dalla barra e resta flottante in basso a destra, sopra di essa.
+  Il principio non cambia — l'inserimento è l'unica azione con un posto fisso sullo
+  schermo — cambia dove quel posto sta.
+- Tab bar fissa in basso: Riepilogo, Movimenti, Conti, Analisi, Profilo — **solo icone, a
+  26px, senza etichette**. Cinque parole su 390px affollano la riga e vengono troncate lo
+  stesso; le sezioni si imparano al primo uso, e il nome resta per chi usa uno screen
+  reader. Su desktop la sidebar le mostra con l'etichetta, profilo in fondo.
 - L'elenco dei soldi si legge in colonna: importo a destra, riga movimento con icona,
   titolo, sottotitolo `categoria · conto · data` (troncato con ellissi, mai a capo).
 - La riga di un trasferimento non somiglia né a un'entrata né a un'uscita: titolo

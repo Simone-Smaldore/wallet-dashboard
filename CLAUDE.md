@@ -1,8 +1,10 @@
 # CLAUDE.md
 
-> Stato: **M0 fatta** — lo scheletro è in piedi e il design system è arrivato. C'è
-> `GET /api/health` che legge da Neon, la pagina `/_stato`, i token in `tokens.css`. Non
-> c'è ancora niente del dominio: nessun conto, nessun movimento, nessun accesso.
+> Stato: **M0 e M1 fatte.** Lo scheletro è online su Vercel, il design system è travasato
+> nei token, e si entra con un magic link: sessione di 30 giorni, profilo, "esci da tutti i
+> dispositivi", e la scocca dell'app con le cinque sezioni. Del dominio non c'è ancora
+> niente — nessun conto, nessuna categoria, nessun movimento: le sezioni sono stanze vuote
+> che dicono cosa arriverà. Il prossimo passo è **M2, conti e categorie**.
 >
 > Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
 > **i motivi per cui sono state prese così**. Buona parte di ciò che c'è scritto sono
@@ -439,14 +441,16 @@ I punti su cui si sbaglia più facilmente:
   Niente bounce, niente parallax.
 - **Copy in italiano, sentence case**, seconda persona informale, niente emoji. Numeri con
   virgola decimale e simbolo dopo con lo spazio: `1.234,56 €`.
-- **Navigazione**: quattro sezioni — **Riepilogo, Movimenti, Conti, Analisi** — con la tab
-  bar mobile che porta il **FAB centrale** per l'inserimento, l'unica azione che ha diritto
-  a un posto fisso sullo schermo. Su desktop la sidebar, col profilo in fondo. Le categorie
-  si gestiscono dalle impostazioni: le tocchi due volte l'anno.
+- **Navigazione**: cinque schede — **Riepilogo, Movimenti, Conti, Analisi, Profilo** — nella
+  tab bar mobile, e le stesse voci nella sidebar su desktop. Le categorie si gestiscono
+  dalle impostazioni: non sono una sezione, le tocchi due volte l'anno.
 
-⚠️ **Su mobile il profilo non ha una scheda.** Col FAB al centro le schede restano quattro, e
-DESIGN.md non dice da dove si raggiunge il profilo su telefono. Va deciso quando si
-costruisce la navigazione, a M1, invece di infilare una quinta scheda per inerzia.
+⚠️ **Il bottone "+" non è una scheda, ed è deliberato.** DESIGN.md lo disegnava al centro di
+una barra da quattro; dando al profilo la quinta scheda il centro non esiste più, quindi
+**fluttua in basso a destra, sopra la barra**. Il principio non cambia — l'inserimento di un
+movimento è l'unica azione con un posto fisso sullo schermo, perché è quella che si fa in
+piedi alla cassa e che decide se l'app viene usata o abbandonata. Cambia solo dove quel
+posto sta. Lo scostamento è registrato in DESIGN.md, non lasciato al codice.
 
 ⚠️ **I riferimenti in fondo a DESIGN.md non esistono nel repository.** `tokens/`,
 `guidelines/`, `components/`, `ui_kits/wallet-app/`: è arrivato solo il documento. Non dare

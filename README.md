@@ -292,6 +292,22 @@ Da fare con il file di backup in mano.
 1. Pusha il repository su GitHub.
 2. Su Vercel: **Add New → Project**, importa il repository e **non toccare** le impostazioni
    di build: le legge da `vercel.json`.
+
+   ⚠️ **La Root Directory deve restare la radice del repository.** È la trappola che ha
+   fatto fallire il primo deploy con:
+
+   ```
+   No Output Directory named "dist" found after the Build completed.
+   ```
+
+   La documentazione dice che `vercel.json` **sovrascrive** le Project Settings, ed è vero
+   — ma solo se Vercel lo trova, e lo cerca nella Root Directory. Se quella punta a una
+   sottocartella, il file non viene letto affatto: Vercel rileva Vite da
+   `frontend/package.json`, applica il suo preset e cerca il `dist` di *quel* preset invece
+   del `frontend/dist` che abbiamo scritto noi. Il sintomo sembra un problema di output
+   directory e la causa è altrove, che è il motivo per cui costa un pomeriggio.
+
+   In **Settings → Build & Deployment**, Root Directory va lasciata vuota (o `./`).
 3. In **Settings → Environment Variables** aggiungi, per tutti e tre gli ambienti:
 
    | Nome | Valore |

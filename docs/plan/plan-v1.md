@@ -412,9 +412,28 @@ Un'aggiunta rispetto al progetto sorgente: `/api/health` fa passare il `detail` 
 `redact_dsn` prima di restituirlo. Quella pagina sta fuori dal login e il driver, quando
 fallisce, cita la stringa di connessione con dentro la password.
 
-**M1 — Accesso.** Magic link, sessione 30 giorni, invio via Brevo, schermata di profilo, "esci
-da tutti i dispositivi". In parallelo, quando arriverà il design: token e componenti di base
-(Button, IconButton, Card, Chip, Field).
+**M1 — Accesso. ✅ fatto.** Magic link, sessione 30 giorni che scorre a ogni uso, invio via
+Brevo, profilo, "esci da tutti i dispositivi". Più la prima migrazione (`household`,
+`app_user`, `login_token`, `session`) e i componenti di base dai token: `Button`, `Field`,
+`Card`, `EmptyState`, `BusyOverlay`.
+
+Il flusso è ripreso quasi per intero dal progetto di riferimento, dove è in produzione da
+mesi: `domain/auth.py` puro, `deps.py` con la sessione che scorre, il sender Brevo con lo
+user-agent esplicito, `lib/pwa.ts` per il caso iOS. Non c'era ragione di riprogettarlo.
+
+Tre scostamenti, tutti decisi in corsa:
+
+- **La scocca è entrata a M1**, non a M2: quattro sezioni segnaposto più il profilo, così la
+  navigazione esiste prima delle schermate invece di essere rifatta attorno a esse.
+- ⚠️ **Cinque schede e il FAB flottante**, non quattro col FAB al centro come nel design. Il
+  profilo su telefono non aveva una strada; gliela dà la quinta scheda, e il bottone **+**
+  si stacca dalla barra restando in basso a destra. `DESIGN.md` è stato aggiornato: il
+  principio "l'inserimento ha un posto fisso" regge, cambia dove quel posto sta.
+- **`lucide-react` è entrata** come dipendenza, come prescrive DESIGN.md.
+
+Una piccola aggiunta rispetto al sorgente: `logout` e `logout-all` azzerano il contesto
+lato client **qualunque cosa risponda il server**. Se la chiamata fallisce, tenere l'utente
+in memoria lascerebbe l'app che sembra dentro mentre ogni richiesta risponde 401.
 
 **M2 — Conti e categorie.** CRUD di entrambi, saldo derivato, riconciliazione, archiviazione,
 riordino. Qui dentro anche **`backup` e `restore`**: da questo momento in poi nel database c'è

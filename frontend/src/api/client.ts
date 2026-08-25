@@ -3,9 +3,11 @@
  * Same URLs in dev and in production: Vite proxies /api to uvicorn locally,
  * Vercel rewrites it to the Python function in production.
  *
- * Small on purpose at M0. The read cache (api/cache.ts) arrives with the first
- * screen that reads real data.
+ * Every foreground request goes through `request`, which raises and lowers the
+ * busy counter — so BusyOverlay cannot be forgotten at a call site.
  */
+
+import { busyWhile } from './busy'
 
 export type Health = {
   status: 'ok' | 'degraded'
@@ -14,19 +16,88 @@ export type Health = {
   detail: string | null
 }
 
-async function request<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { accept: 'application/json' } })
+export type CurrentUser = {
+  id: number
+  email: string
+  display_name: string | null
+  /** "name, or else email", computed server-side so no component repeats it. */
+  label: string
+  preferences: Record<string, unknown>
+  household_id: number
+  household_name: string
+}
 
-  // 503 from /api/health is an answer, not a failure: it carries the payload
-  // that says what is broken. Only a response with no JSON body is an error.
-  const body: unknown = await response.json().catch(() => null)
-  if (body === null) {
-    throw new Error(`Risposta non leggibile da ${path} (HTTP ${response.status})`)
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
+}
+
+type Options = {
+  method?: string
+  body?: unknown
+  /** Errors this caller handles itself, so they do not read as failures. */
+  quiet?: boolean
+}
+
+async function request<T>(path: string, options: Options = {}): Promise<T> {
+  const { method = 'GET', body } = options
+
+  const run = async (): Promise<T> => {
+    const response = await fetch(path, {
+      method,
+      headers: {
+        accept: 'application/json',
+        ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+
+    if (response.status === 204) return undefined as T
+
+    const payload: unknown = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      const detail =
+        payload && typeof payload === 'object' && 'detail' in payload
+          ? String((payload as { detail: unknown }).detail)
+          : `Richiesta fallita (HTTP ${response.status})`
+      throw new ApiError(detail, response.status)
+    }
+
+    if (payload === null) {
+      throw new ApiError(`Risposta non leggibile da ${path}`, response.status)
+    }
+    return payload as T
   }
 
-  return body as T
+  return options.quiet ? run() : busyWhile(run)
 }
 
 export const api = {
-  health: () => request<Health>('/api/health'),
+  /** /_stato reads this one; it must never block the page behind an overlay. */
+  health: () => request<Health>('/api/health', { quiet: true }),
+
+  /** Answers the same whether or not the address is allowed — on purpose. */
+  requestLink: (email: string) =>
+    request<{ message: string }>('/api/auth/request-link', {
+      method: 'POST',
+      body: { email },
+    }),
+
+  verify: (token: string) =>
+    request<CurrentUser>('/api/auth/verify', { method: 'POST', body: { token } }),
+
+  /** Quiet: at startup "not signed in" is an answer, not a failure. */
+  me: () => request<CurrentUser>('/api/auth/me', { quiet: true }),
+
+  updateProfile: (changes: { display_name?: string | null }) =>
+    request<CurrentUser>('/api/auth/me', { method: 'PATCH', body: changes }),
+
+  logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+
+  logoutAll: () => request<void>('/api/auth/logout-all', { method: 'POST' }),
 }

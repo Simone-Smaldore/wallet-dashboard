@@ -1,10 +1,20 @@
-from sqlalchemy.orm import DeclarativeBase
+from datetime import datetime
+
+from sqlalchemy import DateTime, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
-    """Declarative base for every model.
+    """Shared declarative base.
 
-    Empty at M0: the first tables arrive with the login flow in M1. It exists
-    already because Alembic's env.py needs some metadata to compare against,
-    and an empty comparison is a valid one.
+    Table names are singular by convention (`account`, `transaction`), so each
+    model sets __tablename__ explicitly rather than deriving it.
     """
+
+
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
