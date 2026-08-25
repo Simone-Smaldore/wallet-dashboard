@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { LogOut, ShieldOff } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
+import { clearCache } from '../../api/cache'
 import { api } from '../../api/client'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
@@ -38,6 +39,11 @@ export function ProfilePage() {
     } finally {
       // Whatever the server said, this browser is done: keeping a stale user in
       // context would leave the app looking signed in while every call 401s.
+      //
+      // ⚠️ And the read cache goes with it. Without this the next person to
+      // sign in on this browser reads the previous one's accounts and balances
+      // straight out of memory.
+      clearCache()
       setUser(null)
       void navigate('/accedi', { replace: true })
     }

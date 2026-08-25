@@ -25,15 +25,6 @@ export function MovimentiPage() {
   )
 }
 
-export function ContiPage() {
-  return (
-    <EmptyState title="Conti">
-      I tuoi conti e i loro saldi, più le categorie di spesa e di entrata. Arriva con M2 —
-      è il prossimo passo.
-    </EmptyState>
-  )
-}
-
 export function AnalisiPage() {
   return (
     <EmptyState title="Analisi">

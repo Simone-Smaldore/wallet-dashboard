@@ -1,38 +1,49 @@
-import { ChartColumn, House, Landmark, Plus, Receipt, User } from 'lucide-react'
+import { ChartColumn, House, Landmark, Plus, Receipt, Tags, User } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router'
 
 import { Wordmark } from '../../components/Wordmark'
 
 /** The frame every signed-in screen sits in.
  *
- * Mobile: five tabs pinned to the bottom — icons only, no captions — plus the
- * add button floating above them on the right. Five labels on a 390px screen
- * crowd the row and get truncated anyway; five destinations are learnt on the
- * first use, and the name is still there for a screen reader.
+ * Five sections, and the profile is not one of them:
  *
- * ⚠️ The add button is not one of the tabs, and that is the point. DESIGN.md
- * originally put it in the middle of a four-tab bar; with the profile taking a
- * fifth tab there was no middle left. Floating it keeps both: five destinations
- * *and* a fixed home for the one action that has to cost three taps — the whole
- * app depends on recording a spend being frictionless.
+ * - **Mobile**: the five sit in the tab bar as icons only — five words on a
+ *   390px screen crowd the row and get truncated anyway. The profile moves to a
+ *   fixed button top right, which is where you look for "me" on a phone and
+ *   which buys the fifth tab back for Categorie.
+ * - **Desktop**: the sidebar lists all six, profile included and last. There is
+ *   room, and a floating button in a corner would be a second route to the same
+ *   screen.
+ *
+ * ⚠️ One entry point per screen, per platform. The profile is top right on a
+ * phone and in the sidebar on a desktop — never both at once.
  */
 
 const SECTIONS = [
   { to: '/riepilogo', label: 'Riepilogo', Icon: House },
   { to: '/movimenti', label: 'Movimenti', Icon: Receipt },
   { to: '/conti', label: 'Conti', Icon: Landmark },
+  { to: '/categorie', label: 'Categorie', Icon: Tags },
   { to: '/analisi', label: 'Analisi', Icon: ChartColumn },
-  { to: '/profilo', label: 'Profilo', Icon: User },
 ]
+
+const PROFILE = { to: '/profilo', label: 'Profilo', Icon: User }
 
 export function AppShell() {
   return (
     <div className="min-h-full bg-bg-app">
       <Sidebar />
+      <MobileHeader />
 
-      {/* pb-28 on mobile clears the tab bar and the button above it. */}
-      <main className="mx-auto w-full max-w-[720px] px-4 pb-28 pt-6 sm:pl-[248px] sm:pr-6 sm:pb-10">
-        <Outlet />
+      {/* The margin clears the fixed sidebar; the inner box is what gets
+          centred, so the content sits in the middle of the space that is
+          actually left rather than in the middle of the window. On mobile the
+          top padding clears the header and the bottom one the tab bar with the
+          button floating above it. */}
+      <main className="pb-28 pt-20 sm:ml-[212px] sm:pb-12 sm:pt-10">
+        <div className="mx-auto w-full max-w-[900px] px-4 sm:px-8">
+          <Outlet />
+        </div>
       </main>
 
       <AddButton />
@@ -48,24 +59,48 @@ function Sidebar() {
         <Wordmark />
       </div>
 
-      {SECTIONS.map(({ to, label, Icon }) => (
-        <NavLink
-          key={to}
-          to={to}
-          className={({ isActive }) =>
-            [
-              'flex items-center gap-3 rounded-control px-3 py-2.5 text-body transition-colors duration-200',
-              isActive
-                ? 'bg-surface-selected text-accent'
-                : 'text-ink-2 hover:bg-surface-hover hover:text-ink-1',
-            ].join(' ')
-          }
-        >
+      {[...SECTIONS, PROFILE].map(({ to, label, Icon }) => (
+        <NavLink key={to} to={to} className={sidebarLink}>
           <Icon size={20} strokeWidth={2} aria-hidden />
           {label}
         </NavLink>
       ))}
     </aside>
+  )
+}
+
+function sidebarLink({ isActive }: { isActive: boolean }): string {
+  return [
+    'flex items-center gap-3 rounded-control px-3 py-2.5 text-body transition-colors duration-200',
+    isActive
+      ? 'bg-surface-selected text-accent'
+      : 'text-ink-2 hover:bg-surface-hover hover:text-ink-1',
+  ].join(' ')
+}
+
+/** Phone only: the wordmark, and the way to the profile.
+ *
+ * Fixed, because it is the one control that has to be reachable from every
+ * screen without scrolling back to the top of a long list of movements.
+ */
+function MobileHeader() {
+  return (
+    <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-border-soft bg-bg-raise/90 px-4 backdrop-blur-[12px] sm:hidden">
+      <Wordmark />
+
+      <NavLink
+        to={PROFILE.to}
+        aria-label={PROFILE.label}
+        className={({ isActive }) =>
+          [
+            'grid size-10 place-items-center rounded-pill transition-colors duration-200',
+            isActive ? 'bg-surface-selected text-accent' : 'text-ink-2 hover:bg-surface-hover',
+          ].join(' ')
+        }
+      >
+        <PROFILE.Icon size={22} strokeWidth={2} aria-hidden />
+      </NavLink>
+    </header>
   )
 }
 

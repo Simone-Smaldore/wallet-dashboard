@@ -85,3 +85,16 @@ def client(db_factory, settings) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def signed_in(client, sent_emails) -> TestClient:
+    """A client that has already been through the magic-link flow.
+
+    Everything from M2 on sits behind a session, and repeating the four calls in
+    every test would bury what each one is actually about.
+    """
+    client.post("/api/auth/request-link", json={"email": ALLOWED})
+    link = sent_emails[-1]["link"]
+    client.post("/api/auth/verify", json={"token": link.split("token=", 1)[1]})
+    return client

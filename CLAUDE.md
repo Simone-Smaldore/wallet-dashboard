@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-> Stato: **M0 e M1 fatte.** Lo scheletro è online su Vercel, il design system è travasato
-> nei token, e si entra con un magic link: sessione di 30 giorni, profilo, "esci da tutti i
-> dispositivi", e la scocca dell'app con le cinque sezioni. Del dominio non c'è ancora
-> niente — nessun conto, nessuna categoria, nessun movimento: le sezioni sono stanze vuote
-> che dicono cosa arriverà. Il prossimo passo è **M2, conti e categorie**.
+> Stato: **M0, M1 e M2 fatte.** Lo scheletro è online su Vercel, si entra con un magic
+> link, e ci sono le due anagrafiche: conti con saldo derivato e categorie con colore e
+> icona. La tabella dei movimenti esiste con i suoi vincoli ma nessuna schermata la scrive
+> ancora, quindi i saldi sono i saldi iniziali. Ci sono `backup` e `restore`. Il prossimo
+> passo è **M3, i movimenti** — e con loro la riconciliazione.
 >
 > Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
 > **i motivi per cui sono state prese così**. Buona parte di ciò che c'è scritto sono
@@ -121,7 +121,7 @@ cd backend && alembic revision --autogenerate -m "descrizione in inglese"
 cd backend && alembic downgrade -1
 
 # manutenzione del database — vedi la sezione più sotto.
-# ⚠️ Questi non esistono ancora: backup e restore arrivano a M2, il resto a M5.
+# ⚠️ backup e restore esistono da M2; gli altri arrivano a M5.
 cd backend && python -m scripts.backup                 # esporta tutto in JSON
 cd backend && python -m scripts.restore FILE.json      # rimette un backup
 cd backend && python -m scripts.doctor                 # controlla lo stato
@@ -441,9 +441,14 @@ I punti su cui si sbaglia più facilmente:
   Niente bounce, niente parallax.
 - **Copy in italiano, sentence case**, seconda persona informale, niente emoji. Numeri con
   virgola decimale e simbolo dopo con lo spazio: `1.234,56 €`.
-- **Navigazione**: cinque schede — **Riepilogo, Movimenti, Conti, Analisi, Profilo** — nella
-  tab bar mobile, e le stesse voci nella sidebar su desktop. Le categorie si gestiscono
-  dalle impostazioni: non sono una sezione, le tocchi due volte l'anno.
+- **Navigazione**: cinque sezioni — **Riepilogo, Movimenti, Conti, Categorie, Analisi** —
+  nella tab bar mobile a sole icone, e le stesse nella sidebar su desktop.
+- ⚠️ **Il profilo non è una sezione.** Su telefono è un bottone fisso in alto a destra,
+  nella testata insieme al wordmark; su desktop è la sesta voce della sidebar, in fondo.
+  **Una strada sola per piattaforma**: mai tutte e due insieme.
+- **Le categorie sono una sezione a sé**, non un angolo delle impostazioni: qui c'era
+  scritto "le tocchi due volte l'anno", che è vero a regime e falso proprio quando le stai
+  configurando.
 
 ⚠️ **Il bottone "+" non è una scheda, ed è deliberato.** DESIGN.md lo disegnava al centro di
 una barra da quattro; dando al profilo la quinta scheda il centro non esiste più, quindi

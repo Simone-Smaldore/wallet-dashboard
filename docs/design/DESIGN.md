@@ -113,19 +113,33 @@ mai un grafico a zero. Etichette oneste ("proiezione lineare", non "previsione")
 
 ## Layout e navigazione
 
-- Mobile-first, riferimento 390px. Quattro sezioni: Riepilogo, Movimenti, Conti, Analisi.
-- ⚠️ **Rivisto in M1: cinque schede e il FAB flottante, non quattro col FAB al centro.**
-  Il profilo su telefono non aveva una strada, e il disegno originale non lo diceva: gli è
-  stata data la quinta scheda. Con cinque schede il centro non esiste più, quindi il
-  bottone **+** si stacca dalla barra e resta flottante in basso a destra, sopra di essa.
-  Il principio non cambia — l'inserimento è l'unica azione con un posto fisso sullo
-  schermo — cambia dove quel posto sta.
-- Tab bar fissa in basso: Riepilogo, Movimenti, Conti, Analisi, Profilo — **solo icone, a
-  26px, senza etichette**. Cinque parole su 390px affollano la riga e vengono troncate lo
-  stesso; le sezioni si imparano al primo uso, e il nome resta per chi usa uno screen
-  reader. Su desktop la sidebar le mostra con l'etichetta, profilo in fondo.
+- Mobile-first, riferimento 390px.
+- ⚠️ **Rivisto in M2. Cinque sezioni, e il profilo non è una di quelle**: Riepilogo,
+  Movimenti, Conti, **Categorie**, Analisi. Le categorie hanno smesso di stare dentro Conti
+  dietro un selettore e si sono prese una sezione loro.
+- Tab bar fissa in basso con le cinque sezioni, **solo icone a 26px, senza etichette**:
+  cinque parole su 390px affollano la riga e vengono troncate lo stesso, le sezioni si
+  imparano al primo uso, e il nome resta per chi usa uno screen reader.
+- **Il profilo sta in alto a destra su telefono**, in una testata fissa insieme al
+  wordmark: è dove si cerca "io", ed è ciò che restituisce la quinta scheda alle categorie.
+  **Su desktop sta invece in fondo alla sidebar**, che di voci ne regge sei senza sforzo.
+  ⚠️ Una strada sola per schermata, per piattaforma: mai il bottone in alto *e* la voce in
+  sidebar insieme.
+- ⚠️ **Il bottone + non è una scheda.** Il disegno originale lo metteva al centro di una
+  barra da quattro; con cinque il centro non esiste più, quindi fluttua in basso a destra
+  sopra la barra. Il principio non cambia — l'inserimento è l'unica azione con un posto
+  fisso sullo schermo — cambia dove quel posto sta.
 - L'elenco dei soldi si legge in colonna: importo a destra, riga movimento con icona,
   titolo, sottotitolo `categoria · conto · data` (troncato con ellissi, mai a capo).
+- ⚠️ **Un selettore a due vie non è una struttura.** Conti e Categorie ci sono passati per
+  mezza giornata: su schermo stretto sembra ordinato, su desktop nasconde metà pagina e
+  lascia una colonna vuota accanto all'altra metà. Se due cose meritano di stare separate
+  meritano due sezioni; se non lo meritano, stanno una sotto l'altra. Il selettore serve a
+  scegliere *una vista sugli stessi dati* — un periodo, un raggruppamento — non a nascondere
+  contenuto diverso.
+- **Righe per i soldi, tessere per le etichette.** Un saldo è un numero e va in colonna,
+  sempre nella stessa posizione; una categoria è un'icona, un colore e una parola, e sta in
+  una griglia che riempie la larghezza (2 colonne da `sm`, 3 da `lg`).
 - La riga di un trasferimento non somiglia né a un'entrata né a un'uscita: titolo
   "Conto → Conto", sottotitolo "Trasferimento", ciano, senza segno.
 

@@ -5,9 +5,10 @@ import { ConfirmPage } from './features/auth/ConfirmPage'
 import { LoginPage } from './features/auth/LoginPage'
 import { SessionProvider, useSession } from './features/auth/session'
 import { SystemStatus } from './features/debug/SystemStatus'
+import { AccountsPage } from './features/accounts/AccountsPage'
+import { CategoriesPage } from './features/accounts/CategoriesPage'
 import {
   AnalisiPage,
-  ContiPage,
   MovimentiPage,
   NuovoMovimentoPage,
   RiepilogoPage,
@@ -35,7 +36,8 @@ export function App() {
               <Route path="/movimenti" element={<MovimentiPage />} />
               {/* Before /movimenti/:id, or "nuovo" would be read as an id. */}
               <Route path="/movimenti/nuovo" element={<NuovoMovimentoPage />} />
-              <Route path="/conti" element={<ContiPage />} />
+              <Route path="/conti" element={<AccountsPage />} />
+              <Route path="/categorie" element={<CategoriesPage />} />
               <Route path="/analisi" element={<AnalisiPage />} />
               <Route path="/profilo" element={<ProfilePage />} />
             </Route>

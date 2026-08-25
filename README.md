@@ -149,6 +149,10 @@ uno script.
 
 ### Cosa c'è
 
+⚠️ **Oggi esistono solo `backup` e `restore`**, scritti a M2 insieme ai primi dati che
+valeva la pena perdere. Gli altri sono descritti qui perché il loro comportamento è già
+deciso, ma arrivano a M5: se ne lanci uno adesso, Python ti dirà che il modulo non c'è.
+
 #### `backup` — esporta tutto
 
 Il più importante di tutti, e in questo progetto più che in qualsiasi altro: **le spese di

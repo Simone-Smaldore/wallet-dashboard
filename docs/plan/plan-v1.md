@@ -435,10 +435,33 @@ Una piccola aggiunta rispetto al sorgente: `logout` e `logout-all` azzerano il c
 lato client **qualunque cosa risponda il server**. Se la chiamata fallisce, tenere l'utente
 in memoria lascerebbe l'app che sembra dentro mentre ogni richiesta risponde 401.
 
-**M2 — Conti e categorie.** CRUD di entrambi, saldo derivato, riconciliazione, archiviazione,
-riordino. Qui dentro anche **`backup` e `restore`**: da questo momento in poi nel database c'è
-roba inserita a mano, e da M3 ci sarà roba **irrecuperabile**. Il paracadute si mette prima di
+**M2 — Conti e categorie. ✅ fatto.** CRUD di entrambi, saldo derivato, archiviazione,
+riordino, e **`backup` e `restore`**: da questo momento in poi nel database c'è roba
+inserita a mano, e da M3 ci sarà roba **irrecuperabile**. Il paracadute si mette prima di
 saltare.
+
+Tre scostamenti dal piano:
+
+- ⚠️ **La tabella `transaction` è nata qui**, con i suoi CHECK, pur non essendo scritta da
+  nessuna schermata. Le sue regole *sono* il modello — importo intero positivo, il segno nel
+  `kind`, il trasferimento come riga sola — e `domain/balances.py` è potuto nascere testato
+  mentre la superficie era ancora piccola. Il saldo mostrato è già
+  `saldo_iniziale + Σ movimenti` su una somma vuota: la formula è vera, non un segnaposto.
+- **La riconciliazione è slittata a M3.** Genera una rettifica, e a M2 non esisteva una
+  schermata dove vederla comparire: un gesto che crea una riga invisibile è peggio del
+  gesto che manca.
+- ⚠️ **Le categorie stanno dentro Conti**, non nelle impostazioni come diceva `CLAUDE.md`.
+  Sono le due anagrafiche dell'app e la loro casa è insieme.
+
+Una scoperta durante l'implementazione: **il punto decimale è ambiguo e va deciso**.
+`1.234` è milleduecentotrentaquattro euro, `12.50` è dodici e cinquanta, e si scrivono
+entrambi. La regola in `domain/money.py` e nel suo specchio `lib/money.ts`: una stringa
+fatta solo di gruppi di migliaia ben formati si legge come migliaia, in tutto il resto
+l'ultimo punto è il separatore decimale. La virgola non è mai ambigua.
+
+Le categorie iniziali (dieci di uscita, quattro di entrata) sono **seminate dalla
+migrazione**: al primo accesso c'è da cosa partire invece di quattordici form fra te e la
+prima spesa registrata. Sono una proposta, si archiviano.
 
 **M3 — Movimenti.** L'inserimento rapido (importo, categoria, salva), i trasferimenti, la
 modifica e la cancellazione, l'elenco con filtri (periodo, conto, categoria, testo), ricerca e
