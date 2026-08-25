@@ -1,14 +1,14 @@
 # CLAUDE.md
 
-> Stato: **nessuna riga di codice.** Nel repository ci sono solo questo file,
-> [`README.md`](README.md) e il piano in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md).
-> Il design non è ancora stato prodotto.
+> Stato: **M0 fatta** — lo scheletro è in piedi e il design system è arrivato. C'è
+> `GET /api/health` che legge da Neon, la pagina `/_stato`, i token in `tokens.css`. Non
+> c'è ancora niente del dominio: nessun conto, nessun movimento, nessun accesso.
 >
 > Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
-> **i motivi per cui sono state prese così**. Finché il codice non esiste, quello che c'è
-> scritto qui sono vincoli per il codice che verrà, non descrizioni di codice che c'è: dove
-> una regola parla di un file (`domain/stats.py`, `lib/money.ts`) sta dicendo *dove quella
-> cosa dovrà stare*, non che ci sia già.
+> **i motivi per cui sono state prese così**. Buona parte di ciò che c'è scritto sono
+> ancora vincoli per il codice che verrà, non descrizioni di codice che c'è: dove una regola
+> parla di un file che non esiste (`domain/stats.py`, `lib/money.ts`) sta dicendo *dove
+> quella cosa dovrà stare*.
 >
 > Il piano in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md) descrive le intenzioni e le
 > milestone; questo file descrive le regole. Quando il codice comincerà a esistere, questo
@@ -88,9 +88,8 @@ motivazione che vale anche per questo dominio.
 
 ## Comandi
 
-⚠️ **Non ancora verificati**: valgono da M0 in poi, e a valle di M0 questa sezione va
-riscritta con quello che funziona davvero. Il frontend sarà un **npm workspace**: `npm` si
-lancia dalla radice, non da `frontend/`.
+Verificati a valle di M0. Il frontend è un **npm workspace**: `npm` si lancia dalla radice,
+non da `frontend/`.
 
 ```bash
 # installazione (una tantum)
@@ -119,7 +118,8 @@ cd backend && alembic upgrade head
 cd backend && alembic revision --autogenerate -m "descrizione in inglese"
 cd backend && alembic downgrade -1
 
-# manutenzione del database — vedi la sezione più sotto
+# manutenzione del database — vedi la sezione più sotto.
+# ⚠️ Questi non esistono ancora: backup e restore arrivano a M2, il resto a M5.
 cd backend && python -m scripts.backup                 # esporta tutto in JSON
 cd backend && python -m scripts.restore FILE.json      # rimette un backup
 cd backend && python -m scripts.doctor                 # controlla lo stato
@@ -155,7 +155,8 @@ api/index.py            entrypoint Vercel, monta l'app FastAPI
 requirements.txt        dipendenze Python di runtime (le legge Vercel, sta in root)
 vercel.json             build del frontend + routing verso la function Python
 docs/plan/              il piano di progetto
-docs/design/            DESIGN.md, il design system — ⚠️ non esiste ancora
+docs/design/            DESIGN.md, il design system
+docs/mockup/            l'immagine di riferimento da cui è nata la direzione visiva
 ```
 
 ## Il denaro
@@ -381,8 +382,8 @@ righe che si ripetono e righe che spariscono.
 vincoli d'uso:
 
 - ⚠️ **I colori escono solo dai token del design system.** Nessuna palette di default,
-  nessun colore scritto nel componente. Quando arriverà `docs/design/DESIGN.md`, i colori
-  delle serie saranno token come tutti gli altri; finché non arriva, non inventarne.
+  nessun colore scritto nel componente. Le sei serie sono token come tutti gli altri
+  (`--color-chart-1` … `-6`), più `--color-chart-grid` e `--color-chart-axis`.
 - **La libreria si ridisegna, non si usa com'è.** Griglie, assi, tooltip e legende di default
   hanno un aspetto suo che non c'entrerà niente col resto dell'app: vanno spogliati fino a
   somigliare al design system, non il contrario.
@@ -401,30 +402,59 @@ legge come "hai speso zero", che è diverso da "non hai registrato niente".
 
 ## Design
 
-⚠️ **Il design system non esiste ancora.** `docs/design/DESIGN.md` verrà prodotto a parte e
-consegnato: quando arriverà, sarà la fonte di verità per palette, tipografia, forme,
-iconografia e tono di voce, e questa sezione andrà riscritta puntando lì.
+Il design system è **concluso** e vive in [`docs/design/DESIGN.md`](docs/design/DESIGN.md).
+È la fonte di verità per palette, tipografia, forme, iconografia e tono di voce: non
+inventare stili, non introdurre colori o componenti che non stanno lì.
 
-Fino ad allora: **non inventare uno stile**. Non scegliere una palette, non introdurre
-componenti "provvisori" che poi restano. Quello che è già deciso e che il design non
-cambierà:
+Direzione: **cruscotto notturno**. Scuro, calmo, denso di numeri, un solo colore che
+brilla. I token sono travasati in `frontend/src/styles/tokens.css` (blocco `@theme` di
+**Tailwind 4**; niente `tailwind.config.js`, in Tailwind 4 non esiste), definiti una volta
+sola. Nei componenti solo classi Tailwind: **nessun valore arbitrario sparso**. Se serve un
+colore o una spaziatura che non è un token, prima si aggiunge a DESIGN.md.
 
-- **I token stanno in `frontend/src/styles/tokens.css`**, definiti una volta sola, nel blocco
-  `@theme` di **Tailwind 4** (niente `tailwind.config.js`, in Tailwind 4 non esiste). Nei
-  componenti solo classi Tailwind: **nessun valore arbitrario sparso**. Se serve un colore o
-  una spaziatura che non è un token, prima si discute se aggiungerlo al design system.
-- **Mobile-first.** La schermata di riferimento è un telefono, tenuto con una mano sola, in
-  piedi.
-- **Copy in italiano, sentence case**, seconda persona informale. **Niente emoji** nei testi
-  di prodotto.
-- **Numeri con virgola decimale**, separatore delle migliaia, simbolo dell'euro dopo con lo
-  spazio: `1.234,56 €`.
-- **Navigazione proposta**: quattro sezioni — **Riepilogo, Movimenti, Conti, Analisi** — più
-  il profilo, che su desktop sta in fondo alla sidebar e su mobile è una quinta scheda. Le
-  categorie si gestiscono dalle impostazioni, non sono una sezione: le tocchi due volte
-  l'anno. Da riconfermare col design.
-- **L'aggiunta di un movimento è sempre a portata di pollice**, da qualunque sezione. È
-  l'unica azione che ha diritto a un posto fisso sullo schermo.
+I punti su cui si sbaglia più facilmente:
+
+- **Tema solo scuro in V1.** Non esiste una variante chiara e non va aggiunta di
+  iniziativa. `color-scheme: dark` e il `theme-color` della pagina fanno parte del tema:
+  senza, la barra del browser su telefono resta bianca sopra una pagina nera.
+- **Verde `#3DF29B` è l'unico accento**, e il **glow** è riservato all'azione primaria e al
+  FAB. Non si spalma.
+- **Massimo due colori di sfondo per schermata**: `--bg-app` per la pagina, `--surface-card`
+  per le card. Bordi hairline in verde-alpha, mai grigi esadecimali.
+- ⚠️ **I quattro colori del denaro non sono decorativi, sono semantica**: entrate verdi col
+  `+`, uscite rosse col `−`, **trasferimenti ciano e senza segno**, rettifiche ocra. Il
+  ciano esiste perché un trasferimento non è né un'entrata né un'uscita: se la sua riga si
+  legge come una spesa, tutto il senso del modello si perde nell'unico posto in cui l'utente
+  guarda.
+- **Tutti i numeri sono Space Grotesk con `tnum` e `lnum`**, allineati a destra, sempre
+  nella stessa posizione. È quello che fa leggere una colonna di importi invece di farla
+  ballare. C'è la classe `.num` in `styles/index.css`.
+- **Icone: Lucide**, stroke 2px, 20–24px. Niente emoji, niente unicode come icone, **niente
+  SVG disegnati a mano** — è la scelta opposta a quella dell'altro progetto, ed è
+  deliberata. Trasferimenti: `arrow-left-right` in contenitore quadrato, categorie in
+  contenitore rotondo.
+- **Nessun logo**: wordmark tipografico "Wallet." in Space Grotesk 600 con il punto finale
+  in accento, reso sempre come testo (`components/Wordmark.tsx`).
+- **Movimento**: 120/200 ms su `cubic-bezier(.2,.8,.2,1)`, fogli che salgono dal basso.
+  Niente bounce, niente parallax.
+- **Copy in italiano, sentence case**, seconda persona informale, niente emoji. Numeri con
+  virgola decimale e simbolo dopo con lo spazio: `1.234,56 €`.
+- **Navigazione**: quattro sezioni — **Riepilogo, Movimenti, Conti, Analisi** — con la tab
+  bar mobile che porta il **FAB centrale** per l'inserimento, l'unica azione che ha diritto
+  a un posto fisso sullo schermo. Su desktop la sidebar, col profilo in fondo. Le categorie
+  si gestiscono dalle impostazioni: le tocchi due volte l'anno.
+
+⚠️ **Su mobile il profilo non ha una scheda.** Col FAB al centro le schede restano quattro, e
+DESIGN.md non dice da dove si raggiunge il profilo su telefono. Va deciso quando si
+costruisce la navigazione, a M1, invece di infilare una quinta scheda per inerzia.
+
+⚠️ **I riferimenti in fondo a DESIGN.md non esistono nel repository.** `tokens/`,
+`guidelines/`, `components/`, `ui_kits/wallet-app/`: è arrivato solo il documento. Non dare
+per scontato che quei file ci siano.
+
+⚠️ **`docs/mockup/` non contiene un mockup di Wallet**: è il cruscotto di un altro prodotto,
+la fonte della direzione visiva. Si guarda per l'aria che deve avere il prodotto, non per
+copiarne le schermate.
 
 ## Pagina di diagnostica
 

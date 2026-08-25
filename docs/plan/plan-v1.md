@@ -1,9 +1,9 @@
 # Piano — Wallet V1
 
-> Prima stesura — 25 agosto 2026.
-> Scritto **prima** di qualsiasi riga di codice: qui non c'è niente di già fatto, e le
-> milestone sono tutte da fare. Quando l'implementazione comincerà, gli scostamenti si
-> registrano qui man mano, come nel progetto da cui questo documento eredita la forma.
+> Prima stesura — 25 agosto 2026, scritta prima di qualsiasi riga di codice.
+> Revisione dello stesso giorno: il design è arrivato e M0 è stata costruita, quindi le due
+> sezioni corrispondenti non descrivono più intenzioni. Gli scostamenti si registrano qui
+> man mano, come nel progetto da cui questo documento eredita la forma.
 
 ## Context
 
@@ -96,26 +96,42 @@ Se un giorno non dovesse bastare, la mossa non è accorciare la sessione — sar
 quotidiano in cambio di poco — ma un blocco locale con PIN o biometria all'apertura. Non è in
 V1.
 
-## Interfaccia — ⏳ da produrre
+## Interfaccia — ✅ conclusa
 
-Il design system **non esiste ancora**. Verrà prodotto a parte con Claude Design e consegnato
-in [`docs/design/DESIGN.md`](../design/DESIGN.md); da lì si ricava un set di token in
-`frontend/src/styles/tokens.css` (blocco `@theme` di Tailwind 4), definiti una volta sola così
-che i componenti non contengano valori arbitrari.
+Il design system è stato prodotto con **Claude Design** ed è in
+[`docs/design/DESIGN.md`](../design/DESIGN.md), con l'immagine di riferimento in
+[`docs/mockup/`](../mockup/). I token sono travasati in `frontend/src/styles/tokens.css`
+(blocco `@theme` di Tailwind 4) da M0, definiti una volta sola così che i componenti non
+contengano valori arbitrari.
 
-Fino ad allora **non si sceglie una palette e non si scrivono componenti "provvisori"**: è
-esattamente il codice che poi resta. Quello che il design troverà già deciso:
+In sintesi: **cruscotto notturno**, tema solo scuro, fondo `#060A08`, unico accento verde
+`#3DF29B` col glow riservato all'azione primaria e al FAB, Space Grotesk per display e
+**tutti i numeri** (tabulari) e Instrument Sans per il testo, forme arrotondate (card 16,
+controlli 12, pillole 999), icone Lucide, nessun logo ma un wordmark tipografico. Testi in
+italiano, sentence case, seconda persona informale.
 
-- Le schermate: **Riepilogo, Movimenti, Conti, Analisi**, più profilo e impostazioni.
-  Le categorie si gestiscono dalle impostazioni: le tocchi due volte l'anno, non meritano
-  una scheda.
-- ⚠️ **L'inserimento di un movimento è l'elemento più importante dello schermo.** Deve essere
-  raggiungibile da ogni sezione, con un posto fisso, e costare tre tocchi: importo,
-  categoria, salva. Tutto ciò che ne allunga la strada — un campo obbligatorio in più, una
-  conferma, una schermata intermedia — va contestato in fase di design, non dopo.
-- Su mobile il profilo è una quinta scheda; su desktop sta in fondo alla sidebar.
-- Testi in italiano, sentence case, seconda persona informale, niente emoji.
+⚠️ **I quattro colori del denaro sono semantica, non decorazione**: entrate verdi col `+`,
+uscite rosse col `−`, **trasferimenti ciano e senza segno**, rettifiche ocra. È il design che
+ratifica la regola di dominio.
+
+Quello che il design ha confermato di quanto era già deciso:
+
+- Le schermate: **Riepilogo, Movimenti, Conti, Analisi**, più profilo e impostazioni. Le
+  categorie si gestiscono dalle impostazioni: le tocchi due volte l'anno, non meritano una
+  scheda.
+- ⚠️ **L'inserimento di un movimento è l'elemento più importante dello schermo**, ed è
+  diventato il **FAB centrale** della tab bar. Deve costare tre tocchi: importo, categoria,
+  salva. Tutto ciò che ne allunga la strada — un campo obbligatorio in più, una conferma,
+  una schermata intermedia — va contestato adesso, non dopo.
 - Numeri: `1.234,56 €`. Virgola decimale, punto per le migliaia, simbolo dopo con lo spazio.
+
+⚠️ **Uno scostamento aperto, da chiudere a M1**: il piano diceva che su mobile il profilo è
+una quinta scheda, ma col FAB al centro le schede restano quattro e DESIGN.md non dice da
+dove si raggiunge il profilo su telefono. Va deciso costruendo la navigazione.
+
+⚠️ Come nell'altro progetto, i riferimenti in fondo a DESIGN.md (`tokens/`, `guidelines/`,
+`components/`, `ui_kits/wallet-app/`) **non sono nel repository**: è arrivato solo il
+documento.
 
 Due schermate meritano attenzione particolare in fase di design, perché sono quelle che le
 app di questo tipo sbagliano:
@@ -373,9 +389,28 @@ accumula per pagine non è quella cosa e si tiene per conto suo.
 
 ## Milestone
 
-**M0 — Walking skeleton deployato.** Frontend minimo, `GET /api/health` che legge da Neon,
-pagina `/_stato`, tutto online su Vercel. Serve a dimostrare che lo stack sta davvero nel piano
-gratuito. Se qui emergono limiti, si cambia adesso e non a lavoro fatto.
+**M0 — Walking skeleton. ✅ fatto in locale, da deployare.** Frontend minimo,
+`GET /api/health` che legge da Neon, pagina `/_stato`, i token del design system, Alembic
+configurato a vuoto. Serve a dimostrare che lo stack sta davvero nel piano gratuito, e
+finché non è online su Vercel quella dimostrazione non è completa.
+
+Due cose scoperte strada facendo:
+
+- ⚠️ **`"framework": null` in `vercel.json` è la riga che tiene in piedi l'architettura.**
+  La documentazione Vercel marca ormai come legacy le funzioni in `/api` e, se rileva
+  FastAPI in `requirements.txt`, attiva il preset Python che **ha la precedenza sui
+  file-based functions**: il rewrite verso `/api/index` smetterebbe di significare
+  qualcosa. Quella riga disattiva il rilevamento. Senza, l'alternativa sarebbe il preset
+  più `app.frontend()`, che è la strada consigliata per i progetti nuovi ma che qui
+  cambierebbe layout e documenti senza guadagno.
+- **Lo scheletro è rispecchiato da food-plan-maker**, non riscritto: stessi pin di
+  versione, stesso `api/index.py`, stesso `db.py`, stesso `migrations/env.py`. Le trappole
+  già pagate là (host `-pooler`, `NullPool`, `postgresql+psycopg://`, `httpx2` per il
+  TestClient) sono arrivate qui gratis.
+
+Un'aggiunta rispetto al progetto sorgente: `/api/health` fa passare il `detail` da
+`redact_dsn` prima di restituirlo. Quella pagina sta fuori dal login e il driver, quando
+fallisce, cita la stringa di connessione con dentro la password.
 
 **M1 — Accesso.** Magic link, sessione 30 giorni, invio via Brevo, schermata di profilo, "esci
 da tutti i dispositivi". In parallelo, quando arriverà il design: token e componenti di base

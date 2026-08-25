@@ -1,0 +1,26 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Ambiente e segreti — mai in repository
+.env
+backend/.env
+*.env.local
+
+# Backup del database: contengono tutti i movimenti e l'indirizzo email, e il
+# nome di default finisce nella cartella da cui lanci lo script — cioè qui.
+backup-*.json
+
+# Il progetto di riferimento (food-plan-maker), copiato qui per consultazione.
+# Non è codice di Wallet e non va versionato: sono 175 file di un altro
+# progetto, e dentro c'è anche un backup con i dati di quell'household.
+app_ispirazione/
+
+# Vercel
+.vercel/

@@ -1,0 +1,118 @@
+/* Design tokens — single source of truth is docs/design/DESIGN.md.
+ *
+ * Tailwind 4 reads the @theme block and generates utilities from it
+ * (--color-accent -> bg-accent/text-accent, --radius-card -> rounded-card, ...).
+ * There is no tailwind.config.js in Tailwind 4 and there must not be one.
+ *
+ * Do not add a colour, a radius or a type step here without adding it to
+ * DESIGN.md first. Three values below are marked "derived": DESIGN.md describes
+ * them in words but gives no number, so they are a reading of that description
+ * and should be confirmed the next time the design is touched.
+ */
+
+@theme {
+  /* ---- Backgrounds & surfaces ---- */
+  --color-bg-app: #060a08;
+  --color-bg-raise: #0a100d;
+  --color-surface-card: #0e1613;
+  --color-surface-card-2: #131d18;
+  --color-surface-input: #0b1210;
+
+  /* ---- Borders ---- */
+  --color-border-soft: rgba(126, 255, 192, 0.08);
+  --color-border-strong: rgba(126, 255, 192, 0.16);
+  --color-border-focus: rgba(61, 242, 155, 0.55);
+
+  /* ---- Text ramp ---- */
+  --color-ink-1: #edf5f0;
+  --color-ink-2: #9fb4aa;
+  --color-ink-3: #5c6f65;
+  --color-ink-on-accent: #04130b;
+
+  /* ---- Accent: one only, and it is this one ---- */
+  --color-accent: #3df29b;
+  --color-accent-hover: #63f6b0;
+  --color-accent-press: #28d584;
+  --color-accent-dim: rgba(61, 242, 155, 0.12);
+  --color-accent-dim-2: rgba(61, 242, 155, 0.22);
+
+  /* ---- The money colours ----
+   * transfer is neither green nor red and carries no sign, because a transfer
+   * is neither income nor an expense. This is the design ratifying a domain
+   * rule; see CLAUDE.md. */
+  --color-money-income: #3df29b;
+  --color-money-expense: #ff6b5e;
+  --color-money-transfer: #6fcdf2;
+  --color-money-adjustment: #c9b458;
+
+  /* ---- States ---- */
+  --color-danger: #ff6b5e;
+  --color-danger-dim: rgba(255, 107, 94, 0.12); /* derived: --danger at the alpha of --accent-dim */
+  --color-warn: #ffc85c;
+  --color-ok: #3df29b;
+  --color-surface-selected: rgba(61, 242, 155, 0.1);
+  --color-surface-hover: rgba(237, 245, 240, 0.04);
+  --color-scrim: rgba(3, 6, 5, 0.72);
+
+  /* ---- Chart series: Recharts is restyled onto these and nothing else ---- */
+  --color-chart-1: #3df29b;
+  --color-chart-2: #6fcdf2;
+  --color-chart-3: #b18cff;
+  --color-chart-4: #ffc85c;
+  --color-chart-5: #ff7ba8;
+  --color-chart-6: #79e6d0;
+  --color-chart-grid: rgba(126, 255, 192, 0.07);
+  --color-chart-axis: #5c6f65;
+
+  /* ---- Type ----
+   * Space Grotesk carries display and *every number*; Instrument Sans the text.
+   * Both are Google Fonts substitutions declared in DESIGN.md — no font files
+   * were provided. */
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+
+  --text-hero: 34px;
+  --text-hero--line-height: 40px;
+  --text-hero--font-weight: 600;
+
+  --text-title: 22px;
+  --text-title--line-height: 28px;
+  --text-title--font-weight: 600;
+
+  --text-heading: 17px;
+  --text-heading--line-height: 24px;
+  --text-heading--font-weight: 600;
+
+  --text-body: 15px;
+  --text-body--line-height: 22px;
+
+  --text-caption: 13px;
+  --text-caption--line-height: 18px;
+
+  --text-micro: 11px;
+  --text-micro--line-height: 14px;
+  --text-micro--letter-spacing: 0.06em;
+
+  /* ---- Radii ---- */
+  --radius-card: 16px;
+  --radius-control: 12px;
+  --radius-sheet: 24px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation ----
+   * derived: DESIGN.md asks for "a deep shadow plus a light inner hairline"
+   * without giving numbers. The glow is reserved for the primary action and the
+   * FAB — it does not get spread around. */
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(237, 245, 240, 0.04);
+  --shadow-glow-accent: 0 0 24px rgba(61, 242, 155, 0.32);
+}
+
+/* Motion. Not utility-shaped, so it stays a plain custom property: durations
+ * 120/200ms on this curve, no bounce and no parallax. */
+:root {
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Spacing and touch targets come from DESIGN.md's 4/8/12/16/20/24/32/40/48
+ * scale, which is exactly Tailwind's default 1/2/3/4/5/6/8/10/12 — so there is
+ * nothing to redefine here, and using the defaults keeps them honest. */

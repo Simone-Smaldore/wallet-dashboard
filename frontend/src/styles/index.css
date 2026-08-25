@@ -1,0 +1,31 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Dark only in V1. Declared here as well as in the theme-color meta so the
+ * browser paints its own chrome — scrollbars, form controls — to match instead
+ * of flashing white. */
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg-app);
+  color: var(--color-ink-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 22px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Every number in the app is Space Grotesk with tabular, lining figures: it is
+ * what makes a column of amounts line up instead of shimmering. */
+.num {
+  font-family: var(--font-display);
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}

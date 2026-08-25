@@ -1,0 +1,13 @@
+# Runtime dependencies. Vercel installs this file from the repository root.
+# Dev-only tools live in requirements-dev.txt.
+#
+# Every package with a compiled extension must ship a manylinux wheel for the
+# Python version Vercel builds on — there is no compiler in the build image to
+# fall back on. When Vercel moves to a newer Python the fix is to *raise* these
+# pins, never to lower them. Check https://pypi.org/project/<name>/#files first.
+fastapi==0.141.1
+pydantic==2.13.4
+pydantic-settings==2.15.0
+sqlalchemy==2.0.52
+psycopg[binary]==3.3.4
+alembic==1.19.1
