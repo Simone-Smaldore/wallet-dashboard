@@ -22,6 +22,9 @@ export type AccountKind = (typeof ACCOUNT_KINDS)[number]
 export const CATEGORY_KINDS = ['expense', 'income'] as const
 export type CategoryKind = (typeof CATEGORY_KINDS)[number]
 
+export const TRANSACTION_KINDS = ['expense', 'income', 'transfer'] as const
+export type TransactionKind = (typeof TRANSACTION_KINDS)[number]
+
 export const CATEGORY_COLORS = [
   'chart-1',
   'chart-2',
@@ -78,6 +81,51 @@ export type Category = {
   icon: string
   position: number
   is_archived: boolean
+}
+
+export type Transaction = {
+  id: number
+  kind: TransactionKind
+  /** `YYYY-MM-DD`. A day, not an instant: see domain/transaction.py. */
+  date: string
+  amount_cents: number
+  description: string | null
+  /** True for a row written by reconciling a balance. */
+  is_adjustment: boolean
+
+  account_id: number
+  account_name: string
+  counter_account_id: number | null
+  counter_account_name: string | null
+
+  category_id: number | null
+  category_name: string | null
+  category_kind: CategoryKind | null
+  category_color: string | null
+  category_icon: string | null
+}
+
+export type TransactionPage = {
+  transactions: Transaction[]
+  /** Pass back as `cursor` for the next page. Null when there is no next page. */
+  next_cursor: string | null
+}
+
+export type TransactionFilters = {
+  from?: string
+  to?: string
+  account_id?: number
+  category_id?: number
+  kind?: TransactionKind
+  q?: string
+  cursor?: string
+}
+
+export type ReconcileResult = {
+  difference_cents: number
+  /** Null when the balance already matched and nothing was written. */
+  transaction: Transaction | null
+  new_balance_cents: number
 }
 
 export class ApiError extends Error {
@@ -199,11 +247,14 @@ export const api = {
 
   categories: () => request<Category[]>('/api/categories'),
 
+  /** `color` and `icon` are optional: the quick-entry sheet sends the name
+   *  alone and lets the server pick, so creating a category mid-movement costs
+   *  one field instead of three. */
   createCategory: (body: {
     name: string
     kind: CategoryKind
-    color: CategoryColor
-    icon: string
+    color?: CategoryColor
+    icon?: string
   }) => mutate<Category>('/api/categories', 'POST', body, '/api/categories'),
 
   updateCategory: (
@@ -216,6 +267,83 @@ export const api = {
       is_archived: boolean
     }>,
   ) => mutate<Category>(`/api/categories/${id}`, 'PATCH', body, '/api/categories'),
+
+  /* ---- Transactions ---- */
+
+  transactions: (filters: TransactionFilters = {}) =>
+    request<TransactionPage>(`/api/transactions${toQuery(filters)}`),
+
+  createTransaction: (body: {
+    kind: TransactionKind
+    date: string
+    amount_cents: number
+    account_id: number
+    counter_account_id?: number | null
+    category_id?: number | null
+    description?: string | null
+  }) =>
+    // A movement moves a balance, so the accounts list is stale the moment this
+    // lands. Invalidating both here is what stops a screen from having to know.
+    mutate<Transaction>(
+      '/api/transactions',
+      'POST',
+      body,
+      '/api/transactions',
+      '/api/accounts',
+      '/api/auth/me',
+    ),
+
+  updateTransaction: (
+    id: number,
+    body: Partial<{
+      kind: TransactionKind
+      date: string
+      amount_cents: number
+      account_id: number
+      counter_account_id: number | null
+      category_id: number | null
+      description: string | null
+    }>,
+  ) =>
+    mutate<Transaction>(
+      `/api/transactions/${id}`,
+      'PATCH',
+      body,
+      '/api/transactions',
+      '/api/accounts',
+    ),
+
+  deleteTransaction: (id: number) =>
+    mutate<void>(
+      `/api/transactions/${id}`,
+      'DELETE',
+      undefined,
+      '/api/transactions',
+      '/api/accounts',
+    ),
+
+  reconcile: (accountId: number, balance_cents: number) =>
+    mutate<ReconcileResult>(
+      `/api/accounts/${accountId}/reconcile`,
+      'POST',
+      { balance_cents },
+      '/api/transactions',
+      '/api/accounts',
+    ),
+}
+
+/** Turn a filter object into a query string, dropping what is not set.
+ *
+ * An absent filter and an empty one are the same thing here, and sending
+ * `?q=` would make the backend search for the empty string. */
+function toQuery(filters: Record<string, unknown>): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === null || value === '') continue
+    params.set(key, String(value))
+  }
+  const query = params.toString()
+  return query ? `?${query}` : ''
 }
 
 async function mutate<T>(

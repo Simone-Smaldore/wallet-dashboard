@@ -39,7 +39,7 @@ def test_a_colour_outside_the_palette_is_refused(signed_in):
     """The value is a token name, not a hex: a colour no chart can draw must not
     reach the database."""
     assert create(signed_in, color="#ff0000").status_code == 422
-    assert create(signed_in, color="chart-9").status_code == 422
+    assert create(signed_in, color="chart-99").status_code == 422
 
 
 def test_an_icon_outside_the_curated_list_is_refused(signed_in):

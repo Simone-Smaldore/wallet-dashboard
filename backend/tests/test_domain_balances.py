@@ -5,8 +5,13 @@ promise as the food project's hard dietary constraint, transposed. If a transfer
 can move a total, every number the app shows is wrong.
 """
 
+from datetime import date, timedelta
+
 from app.domain.balances import AccountRow, MovementRow, balances, net_worth
 from app.domain.vocabulary import TransactionKind
+
+TODAY = date(2026, 3, 12)
+TOMORROW = TODAY + timedelta(days=1)
 
 CORRENTE = AccountRow(id=1, opening_balance_cents=100_000)
 DEPOSITO = AccountRow(id=2, opening_balance_cents=500_000)
@@ -14,24 +19,25 @@ CONTANTE = AccountRow(id=3, opening_balance_cents=5_000)
 ALL = [CORRENTE, DEPOSITO, CONTANTE]
 
 
-def transfer(amount: int, source: int, target: int) -> MovementRow:
+def transfer(amount: int, source: int, target: int, when: date = TODAY) -> MovementRow:
     return MovementRow(
         kind=TransactionKind.TRANSFER,
         amount_cents=amount,
         account_id=source,
         counter_account_id=target,
+        date=when,
     )
 
 
-def expense(amount: int, account: int) -> MovementRow:
+def expense(amount: int, account: int, when: date = TODAY) -> MovementRow:
     return MovementRow(
-        kind=TransactionKind.EXPENSE, amount_cents=amount, account_id=account
+        kind=TransactionKind.EXPENSE, amount_cents=amount, account_id=account, date=when
     )
 
 
-def income(amount: int, account: int) -> MovementRow:
+def income(amount: int, account: int, when: date = TODAY) -> MovementRow:
     return MovementRow(
-        kind=TransactionKind.INCOME, amount_cents=amount, account_id=account
+        kind=TransactionKind.INCOME, amount_cents=amount, account_id=account, date=when
     )
 
 
@@ -94,9 +100,31 @@ def test_an_adjustment_moves_the_balance():
     """Reconciliation is a movement, not a write on the balance: it is the only
     way the two numbers cannot end up disagreeing."""
     adjustment = MovementRow(
-        kind=TransactionKind.EXPENSE, amount_cents=1_200, account_id=1
+        kind=TransactionKind.EXPENSE, amount_cents=1_200, account_id=1, date=TODAY
     )
     assert balances(ALL, [adjustment])[1] == 100_000 - 1_200
+
+
+def test_a_future_movement_counts_in_the_balance_and_not_as_of_today():
+    """⚠️ The two readings the app needs, from one function.
+
+    The balance on screen includes tomorrow's rent on purpose: it answers "how
+    much will be left". Reconciliation asks the same function for the balance as
+    of today, because a bank statement cannot contain tomorrow — without the
+    cut-off the difference would include money that has not moved, and the
+    adjustment born from it would be a movement that never happened.
+    """
+    rent = expense(80_000, 1, when=TOMORROW)
+
+    assert balances(ALL, [rent])[1] == 100_000 - 80_000
+    assert balances(ALL, [rent], as_of=TODAY)[1] == 100_000
+
+    assert net_worth(ALL, [rent], as_of=TODAY) == net_worth(ALL, [])
+
+
+def test_a_movement_dated_today_is_included_by_as_of_today():
+    """The cut-off is inclusive: today has happened."""
+    assert balances(ALL, [expense(5_000, 1)], as_of=TODAY)[1] == 95_000
 
 
 def test_movements_of_unknown_accounts_are_ignored():

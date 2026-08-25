@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import date as Date
 
 from app.domain.vocabulary import TransactionKind
 
@@ -33,11 +34,15 @@ class MovementRow:
     kind: TransactionKind
     amount_cents: int
     account_id: int
+    date: Date
     counter_account_id: int | None = None
 
 
 def balances(
-    accounts: Iterable[AccountRow], movements: Iterable[MovementRow]
+    accounts: Iterable[AccountRow],
+    movements: Iterable[MovementRow],
+    *,
+    as_of: Date | None = None,
 ) -> dict[int, int]:
     """Every account's balance, in cents, keyed by account id.
 
@@ -45,10 +50,20 @@ def balances(
     and lands on `counter_account_id`. That is the whole reason the model keeps
     it as one row — the two sides can never disagree, because there is only one
     of them.
+
+    ⚠️ `as_of` cuts off movements dated after a day, and exists for exactly one
+    caller: reconciliation. Future-dated movements *do* count in the balance the
+    app shows — that is the deliberate trade-off, the number answers "how much
+    will be left" — but a bank statement cannot contain tomorrow. Comparing
+    against one without this cut-off would produce an adjustment for money that
+    has not moved yet, and that adjustment would stay in the archive forever.
     """
     totals = {account.id: account.opening_balance_cents for account in accounts}
 
     for movement in movements:
+        if as_of is not None and movement.date > as_of:
+            continue
+
         if movement.account_id in totals:
             if movement.kind is TransactionKind.INCOME:
                 totals[movement.account_id] += movement.amount_cents
@@ -66,7 +81,12 @@ def balances(
     return totals
 
 
-def net_worth(accounts: Iterable[AccountRow], movements: Iterable[MovementRow]) -> int:
+def net_worth(
+    accounts: Iterable[AccountRow],
+    movements: Iterable[MovementRow],
+    *,
+    as_of: Date | None = None,
+) -> int:
     """The total, counting only the accounts that are actually yours.
 
     `include_in_net_worth` is off for money you are holding for someone else or
@@ -83,5 +103,5 @@ def net_worth(accounts: Iterable[AccountRow], movements: Iterable[MovementRow]) 
     yours has left your net worth. The same holds in reverse.
     """
     counted = [account for account in accounts if account.include_in_net_worth]
-    totals = balances(counted, movements)
+    totals = balances(counted, movements, as_of=as_of)
     return sum(totals.values())

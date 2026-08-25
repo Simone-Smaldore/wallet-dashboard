@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
 from app.api.deps import CurrentUserDep, DbDep
+from app.domain.vocabulary import CATEGORY_COLORS, DEFAULT_CATEGORY_ICON
 from app.models import Category
 from app.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
 
@@ -49,8 +50,8 @@ def create_category(payload: CategoryCreate, user: CurrentUserDep, db: DbDep) ->
         household_id=user.household_id,
         name=payload.name,
         kind=payload.kind.value,
-        color=payload.color,
-        icon=payload.icon,
+        color=payload.color or _next_color(db, user.household_id),
+        icon=payload.icon or DEFAULT_CATEGORY_ICON,
         position=(highest or 0) + 1,
     )
     db.add(category)
@@ -86,6 +87,19 @@ def update_category(
     db.commit()
     db.refresh(category)
     return category
+
+
+def _next_color(db: DbSession, household_id: int) -> str:
+    """The least used colour of the palette, ties broken by palette order.
+
+    Six colours and more categories than that means repeats are inevitable; what
+    is avoidable is two categories created one after the other coming out
+    identical, which is exactly when you would be looking at them together.
+    """
+    used = list(
+        db.scalars(select(Category.color).where(Category.household_id == household_id)).all()
+    )
+    return min(CATEGORY_COLORS, key=lambda color: (used.count(color), CATEGORY_COLORS.index(color)))
 
 
 def get_owned(db: DbSession, household_id: int, category_id: int) -> Category:

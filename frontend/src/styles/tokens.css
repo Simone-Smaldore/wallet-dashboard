@@ -54,13 +54,22 @@
   --color-surface-hover: rgba(237, 245, 240, 0.04);
   --color-scrim: rgba(3, 6, 5, 0.72);
 
-  /* ---- Chart series: Recharts is restyled onto these and nothing else ---- */
+  /* ---- Chart series and category colours ----
+   * ⚠️ The first six are the chart series, in this order: a line or a pie uses
+   * them and nothing else, because more than six lines on one chart stop being
+   * readable. Seven to ten exist for categories, which can easily be a dozen
+   * and have to be told apart in a list at a glance. Hues are spread on purpose
+   * — nothing here is a shade of its neighbour. */
   --color-chart-1: #3df29b;
   --color-chart-2: #6fcdf2;
   --color-chart-3: #b18cff;
   --color-chart-4: #ffc85c;
   --color-chart-5: #ff7ba8;
   --color-chart-6: #79e6d0;
+  --color-chart-7: #7fb0ff;
+  --color-chart-8: #ff9e64;
+  --color-chart-9: #d6e45c;
+  --color-chart-10: #e86fd0;
   --color-chart-grid: rgba(126, 255, 192, 0.07);
   --color-chart-axis: #5c6f65;
 

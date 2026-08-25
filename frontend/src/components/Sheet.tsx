@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
 
+import { IconButton } from './IconButton'
+
 /** A panel that comes up from the bottom, over a scrim.
  *
  * Creating an account is three fields; it does not deserve a navigation, and a
@@ -44,14 +46,7 @@ export function Sheet({
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="font-display text-heading text-ink-1">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Chiudi"
-            className="grid size-9 place-items-center rounded-pill text-ink-2 transition-colors duration-200 hover:bg-surface-hover hover:text-ink-1"
-          >
-            <X size={20} strokeWidth={2} aria-hidden />
-          </button>
+          <IconButton label="Chiudi" onClick={onClose} Icon={X} iconSize={20} />
         </div>
 
         {children}

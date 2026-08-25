@@ -54,44 +54,101 @@ class CategoryKind(StrEnum):
 # series, every category follows without a data migration — and it keeps the
 # promise that no colour in this app is written anywhere but tokens.css.
 CATEGORY_COLORS: tuple[str, ...] = (
+    # The first six are the chart series, in this order: a line or a pie uses
+    # them and nothing else, because more than six lines on one chart stop being
+    # readable. The rest exist for categories, which can easily be a dozen and
+    # need to be told apart in a list at a glance.
     "chart-1",
     "chart-2",
     "chart-3",
     "chart-4",
     "chart-5",
     "chart-6",
+    "chart-7",
+    "chart-8",
+    "chart-9",
+    "chart-10",
 )
 
 # A curated slice of Lucide rather than the whole set: 1500 icons is not a
-# choice, it is a search problem, and the twenty-four below cover what a
-# household actually spends money on. Names are Lucide's, in PascalCase, and the
-# frontend imports each one explicitly so the bundle only carries these.
+# choice, it is a search problem. Fifty-six is still a curated set — it covers
+# what a household actually spends money on — and the picker shows them eight at
+# a time in themed pages, so the number never lands on screen all at once.
+#
+# The grouping lives in the frontend, which is where it is looked at; the order
+# here matches it so the two do not drift. Names are Lucide's, in PascalCase,
+# and the frontend imports each one explicitly so the bundle carries only these.
 CATEGORY_ICONS: tuple[str, ...] = (
-    "ShoppingCart",
+    # Casa
     "House",
-    "Car",
+    "Key",
+    "Zap",
+    "Droplet",
+    "Flame",
+    "Wifi",
+    "Sofa",
+    "Hammer",
+    # Spesa e cibo
+    "ShoppingCart",
+    "ShoppingBag",
     "UtensilsCrossed",
     "Coffee",
+    "Pizza",
+    "Beer",
+    "Cake",
+    "Store",
+    # Trasporti
+    "Car",
+    "Bus",
+    "Train",
+    "Bike",
+    "Fuel",
+    "Plane",
+    "ParkingCircle",
+    "Ticket",
+    # Salute e cura
     "HeartPulse",
     "Pill",
+    "Stethoscope",
     "Dumbbell",
-    "Shirt",
-    "Gift",
-    "Plane",
-    "Bus",
-    "Fuel",
-    "Wrench",
-    "Smartphone",
-    "Wifi",
-    "Repeat",
+    "Scissors",
+    "Glasses",
+    "Baby",
+    "PawPrint",
+    # Svago
+    "Film",
+    "Music",
+    "Gamepad2",
+    "Camera",
     "BookOpen",
     "GraduationCap",
-    "Film",
-    "PawPrint",
-    "Baby",
+    "Palette",
+    "Sparkles",
+    # Soldi e lavoro
     "Banknote",
+    "Coins",
+    "PiggyBank",
+    "CreditCard",
+    "Briefcase",
+    "Laptop",
+    "TrendingUp",
+    "Repeat",
+    # Altro
+    "Gift",
+    "Smartphone",
+    "Wrench",
+    "Package",
+    "Umbrella",
+    "Heart",
+    "Shirt",
     "Ellipsis",
 )
+
+
+
+#: What a category created on the fly gets until you give it a better one.
+#: Neutral on purpose: a wrong icon costs nothing, a wrong colour costs a chart.
+DEFAULT_CATEGORY_ICON = "Ellipsis"
 
 
 def is_known_color(value: str) -> bool:

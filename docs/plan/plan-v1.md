@@ -22,7 +22,7 @@ come ci arriveranno, perché il modello della V1 deve poterli accogliere senza e
 riscritto.
 
 Il repository contiene [`CLAUDE.md`](../../CLAUDE.md), [`README.md`](../../README.md) e
-questo piano. Il design system non è ancora stato prodotto.
+questo piano, più il design system in [`docs/design/`](../design/).
 
 Questo documento descrive **le intenzioni**; `CLAUDE.md` descrive **le regole**. Quando il
 codice comincerà a esistere e i due divergeranno, ha ragione `CLAUDE.md`, e lo scostamento
@@ -116,18 +116,17 @@ ratifica la regola di dominio.
 
 Quello che il design ha confermato di quanto era già deciso:
 
-- Le schermate: **Riepilogo, Movimenti, Conti, Analisi**, più profilo e impostazioni. Le
-  categorie si gestiscono dalle impostazioni: le tocchi due volte l'anno, non meritano una
-  scheda.
-- ⚠️ **L'inserimento di un movimento è l'elemento più importante dello schermo**, ed è
-  diventato il **FAB centrale** della tab bar. Deve costare tre tocchi: importo, categoria,
-  salva. Tutto ciò che ne allunga la strada — un campo obbligatorio in più, una conferma,
-  una schermata intermedia — va contestato adesso, non dopo.
+- ⚠️ **L'inserimento di un movimento è l'elemento più importante dello schermo.** Deve
+  costare tre tocchi: importo, categoria, salva. Tutto ciò che ne allunga la strada — un
+  campo obbligatorio in più, una conferma, una schermata intermedia — va contestato subito.
 - Numeri: `1.234,56 €`. Virgola decimale, punto per le migliaia, simbolo dopo con lo spazio.
 
-⚠️ **Uno scostamento aperto, da chiudere a M1**: il piano diceva che su mobile il profilo è
-una quinta scheda, ma col FAB al centro le schede restano quattro e DESIGN.md non dice da
-dove si raggiunge il profilo su telefono. Va deciso costruendo la navigazione.
+⚠️ **La navigazione è cambiata due volte, e le due versioni sono registrate in DESIGN.md.**
+Dove si è fermata: **cinque sezioni** — Riepilogo, Movimenti, Conti, **Categorie**, Analisi
+— con il profilo fuori dalle schede (in alto a destra su telefono, in fondo alla sidebar su
+desktop) e il **+ flottante** accanto alla tab bar invece che al suo centro. Le categorie
+sono uscite dalle impostazioni: il piano diceva "le tocchi due volte l'anno", che è vero a
+regime e falso proprio quando le configuri.
 
 ⚠️ Come nell'altro progetto, i riferimenti in fondo a DESIGN.md (`tokens/`, `guidelines/`,
 `components/`, `ui_kits/wallet-app/`) **non sono nel repository**: è arrivato solo il
@@ -463,10 +462,30 @@ Le categorie iniziali (dieci di uscita, quattro di entrata) sono **seminate dall
 migrazione**: al primo accesso c'è da cosa partire invece di quattordici form fra te e la
 prima spesa registrata. Sono una proposta, si archiviano.
 
-**M3 — Movimenti.** L'inserimento rapido (importo, categoria, salva), i trasferimenti, la
-modifica e la cancellazione, l'elenco con filtri (periodo, conto, categoria, testo), ricerca e
-paginazione keyset. È il cuore dell'app: se questa milestone è faticosa da usare, il resto non
-serve a niente.
+**M3 — Movimenti. ✅ fatto.** L'inserimento in un foglio dal basso raggiungibile da ogni
+sezione, l'elenco raggruppato per giorno con filtri, ricerca e paginazione keyset, modifica
+e cancellazione, trasferimenti, e la riconciliazione slittata da M2.
+
+I due punti che il piano lasciava aperti sono chiusi:
+
+- **L'elenco è raggruppato per giorno**, con il totale speso in testa a ogni giornata. Si
+  scorre cercando "martedì" invece di leggere venti date ripetute. ⚠️ Nel totale vanno
+  **solo le uscite**: un trasferimento sposta senza spendere e una rettifica misura quello
+  che avevi dimenticato, e sommarli farebbe sembrare peggiore una giornata proprio nel
+  numero che si guarda di sfuggita.
+- ⚠️ **I movimenti futuri si registrano e contano subito nel saldo.** Il numero risponde a
+  "quanto mi resterà"; il prezzo è che finché non avvengono non coincide con la banca. Una
+  sola eccezione, obbligatoria: **la riconciliazione si ferma a oggi**. Senza quel taglio
+  la differenza includerebbe l'affitto della settimana prossima e la rettifica sarebbe un
+  movimento inventato che resta in archivio.
+
+Due decisioni prese in corsa:
+
+- **La categoria che manca si crea dentro il foglio**, chiedendo solo il nome. Colore e
+  icona li assegna il server. Mandare qualcuno in un'altra sezione a metà di un
+  inserimento è il modo migliore per fargli scegliere "Altro" per sempre.
+- **I movimenti si cancellano**, non si archiviano: un movimento sbagliato non è storia, è
+  un errore di battitura.
 
 **M4 — Riepilogo e analisi. ← fine V1.** I grafici (elenco sotto), l'obiettivo di risparmio del
 mese, il passaggio da un grafico ai movimenti che lo compongono.
@@ -651,8 +670,8 @@ librerie di form, librerie di date (`period.py`/`period.ts` bastano), librerie d
 
 ## Punti aperti da decidere durante l'esecuzione
 
-1. **Raggruppamento dell'elenco movimenti**: per giorno con un'intestazione, o piatto? Dipende
-   da quanti movimenti ci sono davvero in una giornata. Si decide a M3 guardando i dati veri.
+1. ~~**Raggruppamento dell'elenco movimenti**~~ → chiuso a M3: per giorno, con il totale
+   delle sole uscite in testa.
 2. **Colore e icona delle categorie**: quanto lasciare scegliere e quanto proporre. Una palette
    libera produce dieci categorie di dieci sfumature di blu; una chiusa non basta mai. Si
    decide col design.
@@ -660,6 +679,6 @@ librerie di form, librerie di date (`period.py`/`period.ts` bastano), librerie d
    dati veri, non prima.
 4. **Categorie iniziali**: proporne un elenco al primo accesso o partire dal foglio bianco? Il
    foglio bianco è più onesto ma l'elenco toglie attrito il primo giorno. Da valutare a M2.
-5. **Movimenti futuri**: registrare una spesa con data futura si deve poter fare? Se sì, i
-   saldi "di oggi" devono escluderla, e questo è un `WHERE date <= today` da mettere in un
-   posto solo. Da decidere a M3.
+5. ~~**Movimenti futuri**~~ → chiusi a M3: si registrano e **contano subito** nel saldo. Il
+   `WHERE date <= today` esiste in un posto solo — il parametro `as_of` di
+   `domain/balances.py` — e ha un chiamante soltanto: la riconciliazione.

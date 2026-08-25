@@ -16,29 +16,11 @@ export function RiepilogoPage() {
   )
 }
 
-export function MovimentiPage() {
-  return (
-    <EmptyState title="Movimenti">
-      L'elenco di tutto quello che entra ed esce, con i filtri per periodo, conto e
-      categoria. Arriva con M3.
-    </EmptyState>
-  )
-}
-
 export function AnalisiPage() {
   return (
     <EmptyState title="Analisi">
       Dove finiscono i soldi: per categoria, mese per mese, e il patrimonio nel tempo.
       Arriva con M4.
-    </EmptyState>
-  )
-}
-
-export function NuovoMovimentoPage() {
-  return (
-    <EmptyState title="Aggiungi un movimento">
-      Importo, categoria, salva. È la schermata più importante dell'app e arriva con M3,
-      insieme ai conti su cui registrare.
     </EmptyState>
   )
 }

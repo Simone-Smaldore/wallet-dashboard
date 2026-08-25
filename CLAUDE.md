@@ -1,10 +1,9 @@
 # CLAUDE.md
 
-> Stato: **M0, M1 e M2 fatte.** Lo scheletro è online su Vercel, si entra con un magic
-> link, e ci sono le due anagrafiche: conti con saldo derivato e categorie con colore e
-> icona. La tabella dei movimenti esiste con i suoi vincoli ma nessuna schermata la scrive
-> ancora, quindi i saldi sono i saldi iniziali. Ci sono `backup` e `restore`. Il prossimo
-> passo è **M3, i movimenti** — e con loro la riconciliazione.
+> Stato: **M0, M1, M2 e M3 fatte.** Si entra con un magic link, ci sono conti e categorie,
+> e si registrano movimenti: uscite, entrate e trasferimenti, con l'elenco filtrabile e la
+> riconciliazione dei saldi. Ci sono `backup` e `restore`. Manca **M4, riepilogo e
+> analisi** — i grafici e l'obiettivo di risparmio — e poi la V1 è chiusa.
 >
 > Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
 > **i motivi per cui sono state prese così**. Buona parte di ciò che c'è scritto sono
@@ -336,6 +335,26 @@ sulla strada.
 ⚠️ **La descrizione è facoltativa e resta tale.** Renderla obbligatoria "per avere dati
 migliori" è esattamente il campo che a marzo ti fa dire "poi la metto" e ad aprile ti fa
 smettere.
+
+⚠️ **La categoria che manca si crea dentro il foglio dell'inserimento**, chiedendo solo il
+nome: colore e icona li assegna il server (il colore meno usato della palette, icona
+neutra) e si cambiano dopo in Categorie. Mandare qualcuno in un'altra sezione a metà di un
+inserimento è il modo migliore per fargli scegliere "Altro" per sempre. È la scelta opposta
+al reparto di un ingrediente nel progetto sorgente, e la differenza è che lì indovinare ti
+mandava dalla parte sbagliata del negozio, qui un'icona provvisoria non sposta nessun
+numero.
+
+⚠️ **I movimenti si cancellano davvero**, a differenza di conti e categorie. Un conto
+archiviato è storia; un movimento sbagliato non è storia, è un errore di battitura, e
+tenerlo "archiviato" vorrebbe dire falsare ogni totale per sempre.
+
+⚠️ **Le date future sono permesse e contano subito nel saldo.** Il numero risponde a
+"quanto mi resterà", non a "quanto ho in questo istante", e finché quei movimenti non
+avvengono **non coincide con la banca**. È il compromesso accettato, con una sola
+eccezione obbligatoria: **la riconciliazione confronta solo fino a oggi** (`as_of` in
+`domain/balances.py`). Un estratto conto non può contenere domani, e senza quel taglio la
+differenza includerebbe l'affitto della settimana prossima — generando una rettifica per
+soldi che non si sono mossi, che poi resta in archivio per sempre.
 
 ## I periodi e le statistiche
 

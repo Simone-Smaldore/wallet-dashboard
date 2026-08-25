@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { ChartColumn, House, Landmark, Plus, Receipt, Tags, User } from 'lucide-react'
-import { NavLink, Outlet, useNavigate } from 'react-router'
+import { NavLink, Outlet } from 'react-router'
 
 import { Wordmark } from '../../components/Wordmark'
+import { TransactionSheet } from '../transactions/TransactionSheet'
 
 /** The frame every signed-in screen sits in.
  *
@@ -30,6 +32,10 @@ const SECTIONS = [
 const PROFILE = { to: '/profilo', label: 'Profilo', Icon: User }
 
 export function AppShell() {
+  // The sheet lives here rather than on a page: the + has to work from every
+  // section, and recording a spend must not cost a navigation there and back.
+  const [recording, setRecording] = useState(false)
+
   return (
     <div className="min-h-full bg-bg-app">
       <Sidebar />
@@ -46,8 +52,10 @@ export function AppShell() {
         </div>
       </main>
 
-      <AddButton />
+      <AddButton onClick={() => setRecording(true)} />
       <TabBar />
+
+      {recording ? <TransactionSheet movement={null} onClose={() => setRecording(false)} /> : null}
     </div>
   )
 }
@@ -91,6 +99,7 @@ function MobileHeader() {
       <NavLink
         to={PROFILE.to}
         aria-label={PROFILE.label}
+        title={PROFILE.label}
         className={({ isActive }) =>
           [
             'grid size-10 place-items-center rounded-pill transition-colors duration-200',
@@ -132,18 +141,16 @@ function TabBar() {
 
 /** The one action with a permanent place on the screen.
  *
- * Sits above the tab bar on mobile and bottom-right on desktop. Does nothing
- * yet: the form arrives with M3, and until then saying so is more honest than
- * hiding the button and rebuilding the layout later.
+ * Sits above the tab bar on mobile and bottom-right on desktop, and opens the
+ * sheet over whatever you were looking at.
  */
-function AddButton() {
-  const navigate = useNavigate()
-
+function AddButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      onClick={() => void navigate('/movimenti/nuovo')}
+      onClick={onClick}
       aria-label="Aggiungi un movimento"
+      title="Aggiungi un movimento"
       className="fixed bottom-20 right-4 z-40 grid size-14 place-items-center rounded-pill bg-accent text-ink-on-accent shadow-glow-accent transition-colors duration-200 hover:bg-accent-hover active:bg-accent-press sm:bottom-8 sm:right-8"
     >
       <Plus size={26} strokeWidth={2} aria-hidden />

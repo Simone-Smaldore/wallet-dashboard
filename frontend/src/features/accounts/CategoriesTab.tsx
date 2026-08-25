@@ -5,6 +5,7 @@ import { api, type Category, type CategoryKind } from '../../api/client'
 import { useQuery } from '../../api/cache'
 import { Button } from '../../components/Button'
 import { CategoryIcon } from '../../components/CategoryIcon'
+import { IconButton } from '../../components/IconButton'
 import { EmptyState } from '../../components/EmptyState'
 import { CategoryForm } from './CategoryForm'
 
@@ -151,28 +152,16 @@ function CategoryCard({
       </div>
 
       <div className="flex shrink-0">
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label={`Modifica ${category.name}`}
-          className="grid size-9 place-items-center rounded-pill text-ink-3 transition-colors duration-200 hover:bg-surface-hover hover:text-ink-1"
-        >
-          <Pencil size={17} strokeWidth={2} aria-hidden />
-        </button>
-        <button
-          type="button"
-          onClick={() => void toggleArchive()}
-          aria-label={
-            category.is_archived ? `Ripristina ${category.name}` : `Archivia ${category.name}`
+        <IconButton label={`Modifica ${category.name}`} onClick={onEdit} Icon={Pencil} />
+        <IconButton
+          label={
+            category.is_archived
+              ? `Ripristina ${category.name}`
+              : `Archivia ${category.name}`
           }
-          className="grid size-9 place-items-center rounded-pill text-ink-3 transition-colors duration-200 hover:bg-surface-hover hover:text-ink-1"
-        >
-          {category.is_archived ? (
-            <ArchiveRestore size={17} strokeWidth={2} aria-hidden />
-          ) : (
-            <Archive size={17} strokeWidth={2} aria-hidden />
-          )}
-        </button>
+          onClick={() => void toggleArchive()}
+          Icon={category.is_archived ? ArchiveRestore : Archive}
+        />
       </div>
     </li>
   )

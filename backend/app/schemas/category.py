@@ -34,10 +34,24 @@ class CategoryBase(BaseModel):
 
 
 class CategoryCreate(CategoryBase):
+    """⚠️ `color` and `icon` are optional, and that is what makes it possible to
+    create a category from inside the quick-entry sheet.
+
+    Being sent somewhere else halfway through recording a spend is the surest
+    way to make someone pick "Altro" forever. So the sheet asks for the name and
+    nothing else: the server picks the next least-used colour — two categories
+    created in a row must not come out the same in a chart — and a neutral icon,
+    both changeable later in Categorie.
+
+    This is the opposite call to the ingredient's aisle in the project this one
+    is modelled on, and deliberately so: guessing an aisle sent you to the wrong
+    side of the shop, while a placeholder icon moves no number at all.
+    """
+
     name: str = Field(min_length=1, max_length=120)
     kind: CategoryKind
-    color: str = Field(max_length=20)
-    icon: str = Field(max_length=40)
+    color: str | None = Field(default=None, max_length=20)
+    icon: str | None = Field(default=None, max_length=40)
 
 
 class CategoryUpdate(CategoryBase):

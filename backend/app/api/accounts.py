@@ -5,6 +5,8 @@ Balances are computed here, never stored — see domain/balances.py for why.
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
@@ -12,8 +14,9 @@ from sqlalchemy.orm import Session as DbSession
 from app.api.deps import CurrentUserDep, DbDep
 from app.domain import balances as domain
 from app.domain.vocabulary import TransactionKind
-from app.models import Account, Transaction
+from app.models import Account, Transaction, User
 from app.schemas.account import AccountCreate, AccountList, AccountOut, AccountUpdate
+from app.schemas.transaction import ReconcileRequest, ReconcileResult
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -114,6 +117,72 @@ def update_account(
     return _to_schema(account, totals.get(account.id, account.opening_balance_cents))
 
 
+@router.post("/{account_id}/reconcile", response_model=ReconcileResult)
+def reconcile(
+    account_id: int, payload: ReconcileRequest, user: CurrentUserDep, db: DbDep
+) -> ReconcileResult:
+    """"Il saldo vero oggi è X".
+
+    ⚠️ The difference is measured against the balance **as of today**, not
+    against the one on screen. Future-dated movements count in what the app
+    shows — that is the deliberate choice — but a bank statement cannot contain
+    tomorrow. Without the cut-off the difference would include money that has
+    not moved yet, and the adjustment born from it would be a movement that
+    never happened, sitting in the archive forever.
+
+    ⚠️ The row created has no category. A reconciliation is not consumption, it
+    is the measure of what you forgot to record: filing it under a category
+    would invent a spend you cannot account for, and skew the very chart you
+    were trying to make honest.
+    """
+    account = get_owned(db, user.household_id, account_id)
+    today = date.today()
+
+    movements = _movement_rows(db, user.household_id)
+    current = domain.balances(_balance_rows([account]), movements, as_of=today).get(
+        account.id, account.opening_balance_cents
+    )
+
+    difference = payload.balance_cents - current
+    if difference == 0:
+        # Nothing to write. Saying so is better than recording a zero movement
+        # that would clutter the list without meaning anything.
+        return ReconcileResult(
+            difference_cents=0,
+            transaction=None,
+            new_balance_cents=domain.balances(_balance_rows([account]), movements).get(
+                account.id, account.opening_balance_cents
+            ),
+        )
+
+    movement = Transaction(
+        household_id=user.household_id,
+        kind=(
+            TransactionKind.INCOME.value if difference > 0 else TransactionKind.EXPENSE.value
+        ),
+        date=today,
+        amount_cents=abs(difference),
+        account_id=account.id,
+        is_adjustment=True,
+        description="Rettifica del saldo",
+        created_by_user_id=user.id,
+    )
+    db.add(movement)
+    db.commit()
+
+    from app.api.transactions import load_one
+
+    updated = domain.balances(
+        _balance_rows([account]), _movement_rows(db, user.household_id)
+    ).get(account.id, account.opening_balance_cents)
+
+    return ReconcileResult(
+        difference_cents=difference,
+        transaction=load_one(db, user.household_id, movement.id),
+        new_balance_cents=updated,
+    )
+
+
 def get_owned(db: DbSession, household_id: int, account_id: int) -> Account:
     account = db.get(Account, account_id)
     # Same answer for "does not exist" and "belongs to someone else": the second
@@ -168,6 +237,7 @@ def _movement_rows(db: DbSession, household_id: int) -> list[domain.MovementRow]
             Transaction.amount_cents,
             Transaction.account_id,
             Transaction.counter_account_id,
+            Transaction.date,
         ).where(Transaction.household_id == household_id)
     ).all()
 
@@ -177,8 +247,9 @@ def _movement_rows(db: DbSession, household_id: int) -> list[domain.MovementRow]
             amount_cents=amount,
             account_id=account_id,
             counter_account_id=counter_account_id,
+            date=when,
         )
-        for kind, amount, account_id, counter_account_id in rows
+        for kind, amount, account_id, counter_account_id, when in rows
     ]
 
 

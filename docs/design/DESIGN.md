@@ -48,7 +48,15 @@ rgba(237,245,240,.04)`, `--scrim rgba(3,6,5,.72)`.
 Serie dei grafici (Recharts si ridisegna SOLO su questi): `--chart-1 #3DF29B`,
 `--chart-2 #6FCDF2`, `--chart-3 #B18CFF`, `--chart-4 #FFC85C`, `--chart-5 #FF7BA8`,
 `--chart-6 #79E6D0`; griglia `--chart-grid rgba(126,255,192,.07)`, assi `--chart-axis
-#5C6F65`. I colori delle categorie escono da questa palette.
+#5C6F65`.
+
+⚠️ **Esteso a M3: quattro colori in più per le categorie** — `--chart-7 #7FB0FF`,
+`--chart-8 #FF9E64`, `--chart-9 #D6E45C`, `--chart-10 #E86FD0`. Sei bastano a un grafico e
+non bastano a un elenco di categorie, che di categorie ne ha una dozzina e le deve far
+distinguere a colpo d'occhio. **I grafici continuano a usare solo le prime sei**: oltre,
+le linee smettono di essere leggibili, e una torta con troppe fette raggruppa la coda in
+"Altro" invece di inventarsi tinte. Le tonalità sono distanti fra loro di proposito —
+nessuna è una sfumatura della vicina.
 
 ## Tipografia
 
@@ -99,6 +107,11 @@ Scala mobile-first:
 
 - **Lucide** (stroke 2px), 20–24px, colore `--ink-2`, attive `--accent` — sostituzione
   dichiarata, nessun set fornito. In produzione `lucide-react`.
+- **Le icone delle categorie sono un insieme curato di 56**, non le 1500 di Lucide: 1500
+  non è una scelta, è un problema di ricerca. Nel selettore stanno **otto per volta in
+  pagine a tema** (Casa, Spesa e cibo, Trasporti, Salute e cura, Svago, Soldi e lavoro,
+  Altro) con le frecce per scorrerle: il nome del gruppo dice dove sei, che è più utile di
+  "pagina 3 di 7".
 - Trasferimenti: `arrow-left-right`, icona in contenitore **quadrato** (raggio 12); le
   categorie in contenitore rotondo.
 - Niente emoji, niente unicode come icone, niente SVG disegnati a mano.
@@ -130,16 +143,29 @@ mai un grafico a zero. Etichette oneste ("proiezione lineare", non "previsione")
   sopra la barra. Il principio non cambia — l'inserimento è l'unica azione con un posto
   fisso sullo schermo — cambia dove quel posto sta.
 - L'elenco dei soldi si legge in colonna: importo a destra, riga movimento con icona,
-  titolo, sottotitolo `categoria · conto · data` (troncato con ellissi, mai a capo).
+  titolo, sottotitolo `categoria · conto` (troncato con ellissi, mai a capo).
+- ⚠️ **La data non sta nella riga, sta nell'intestazione del giorno.** L'elenco è
+  raggruppato per giornata — `Oggi`, `Ieri`, poi `giovedì 12 marzo` — con a destra il
+  totale **delle sole uscite** di quel giorno. Ripetere la stessa data su sei righe di fila
+  è rumore; e sommare trasferimenti o rettifiche in quel totale farebbe sembrare peggiore
+  una giornata proprio nel numero che si guarda di sfuggita.
+- Un movimento con data futura porta l'etichetta `futuro`: conta nel saldo, e quando il
+  saldo non torna con la banca è la riga che lo spiega.
 - ⚠️ **Un selettore a due vie non è una struttura.** Conti e Categorie ci sono passati per
   mezza giornata: su schermo stretto sembra ordinato, su desktop nasconde metà pagina e
   lascia una colonna vuota accanto all'altra metà. Se due cose meritano di stare separate
   meritano due sezioni; se non lo meritano, stanno una sotto l'altra. Il selettore serve a
   scegliere *una vista sugli stessi dati* — un periodo, un raggruppamento — non a nascondere
   contenuto diverso.
-- **Righe per i soldi, tessere per le etichette.** Un saldo è un numero e va in colonna,
-  sempre nella stessa posizione; una categoria è un'icona, un colore e una parola, e sta in
-  una griglia che riempie la larghezza (2 colonne da `sm`, 3 da `lg`).
+- ⚠️ **Righe per gli elenchi che si scorrono, card per le poche cose che si leggono.**
+  Prima qui c'era scritto "righe per i soldi": sbagliato, e scoperto provandolo. Un elenco
+  di movimenti si scorre cercandone uno, quindi gli importi vanno in colonna, sempre nella
+  stessa posizione. Un conto invece non si scorre: sono sei, e ognuno è un nome e un numero
+  che devono essere leggibili. Su 390px, nome + tipo + saldo + tre comandi sulla stessa riga
+  non lasciano spazio a niente. **Conti e categorie sono card in griglia** (2 colonne da
+  `sm`, 3 da `lg`), **i movimenti sono righe**.
+- Nella card di un conto il **saldo ha la taglia `title`**: è quello per cui la card esiste.
+  **Rosso se negativo**, perché un conto in rosso va notato senza dover leggere il segno.
 - La riga di un trasferimento non somiglia né a un'entrata né a un'uscita: titolo
   "Conto → Conto", sottotitolo "Trasferimento", ciano, senza segno.
 

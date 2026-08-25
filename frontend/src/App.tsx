@@ -7,12 +7,8 @@ import { SessionProvider, useSession } from './features/auth/session'
 import { SystemStatus } from './features/debug/SystemStatus'
 import { AccountsPage } from './features/accounts/AccountsPage'
 import { CategoriesPage } from './features/accounts/CategoriesPage'
-import {
-  AnalisiPage,
-  MovimentiPage,
-  NuovoMovimentoPage,
-  RiepilogoPage,
-} from './features/placeholder/Placeholders'
+import { AnalisiPage, RiepilogoPage } from './features/placeholder/Placeholders'
+import { TransactionsPage } from './features/transactions/TransactionsPage'
 import { ProfilePage } from './features/profile/ProfilePage'
 import { AppShell } from './features/shell/AppShell'
 
@@ -33,9 +29,7 @@ export function App() {
           <Route element={<RequireSession />}>
             <Route element={<AppShell />}>
               <Route path="/riepilogo" element={<RiepilogoPage />} />
-              <Route path="/movimenti" element={<MovimentiPage />} />
-              {/* Before /movimenti/:id, or "nuovo" would be read as an id. */}
-              <Route path="/movimenti/nuovo" element={<NuovoMovimentoPage />} />
+              <Route path="/movimenti" element={<TransactionsPage />} />
               <Route path="/conti" element={<AccountsPage />} />
               <Route path="/categorie" element={<CategoriesPage />} />
               <Route path="/analisi" element={<AnalisiPage />} />

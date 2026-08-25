@@ -1,18 +1,21 @@
 import { useState } from 'react'
-import { Archive, ArchiveRestore, Pencil, Plus } from 'lucide-react'
+import { Archive, ArchiveRestore, Pencil, Plus, Scale } from 'lucide-react'
 
 import { api, type Account } from '../../api/client'
 import { useQuery } from '../../api/cache'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { EmptyState } from '../../components/EmptyState'
+import { IconButton } from '../../components/IconButton'
 import { formatMoney } from '../../lib/money'
 import { AccountForm, KIND_LABELS } from './AccountForm'
+import { ReconcileSheet } from './ReconcileSheet'
 
 export function AccountsTab() {
   const { data, loading, error, refetch } = useQuery('/api/accounts', api.accounts)
   const [editing, setEditing] = useState<Account | null>(null)
   const [creating, setCreating] = useState(false)
+  const [reconciling, setReconciling] = useState<Account | null>(null)
 
   if (loading) return null
   if (error && !data) {
@@ -38,7 +41,7 @@ export function AccountsTab() {
           {formatMoney(data?.net_worth_cents ?? 0)}
         </p>
         <p className="mt-1 text-caption text-ink-2">
-          Somma dei conti che contano. Da M3 si muoverà con i movimenti.
+          Somma dei conti che contano nel patrimonio.
         </p>
       </Card>
 
@@ -62,38 +65,31 @@ export function AccountsTab() {
       </div>
 
       {active.length > 0 ? (
-        <Card className="p-0">
-          {/* A list, not a grid: a column of amounts in the same place on every
-              row is what makes them readable at a glance. Categories are tiles
-              because a category is an icon and a word; a balance is a number. */}
-          <ul>
-            {active.map((account, index) => (
-              <AccountRow
-                key={account.id}
-                account={account}
-                first={index === 0}
-                onEdit={() => setEditing(account)}
-              />
-            ))}
-          </ul>
-        </Card>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {active.map((account) => (
+            <AccountCard
+              key={account.id}
+              account={account}
+              onEdit={() => setEditing(account)}
+              onReconcile={() => setReconciling(account)}
+            />
+          ))}
+        </ul>
       ) : null}
 
       {archived.length > 0 ? (
         <>
-          <p className="px-1 text-micro uppercase text-ink-3">Archiviati</p>
-          <Card className="p-0">
-            <ul>
-              {archived.map((account, index) => (
-                <AccountRow
-                  key={account.id}
-                  account={account}
-                  first={index === 0}
-                  onEdit={() => setEditing(account)}
-                />
-              ))}
-            </ul>
-          </Card>
+          <p className="mt-2 px-1 text-micro uppercase text-ink-3">Archiviati</p>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {archived.map((account) => (
+              <AccountCard
+                key={account.id}
+                account={account}
+                onEdit={() => setEditing(account)}
+                onReconcile={() => setReconciling(account)}
+              />
+            ))}
+          </ul>
         </>
       ) : null}
 
@@ -112,18 +108,33 @@ export function AccountsTab() {
           onSaved={() => setEditing(null)}
         />
       ) : null}
+
+      {reconciling ? (
+        <ReconcileSheet account={reconciling} onClose={() => setReconciling(null)} />
+      ) : null}
     </div>
   )
 }
 
-function AccountRow({
+/** An account as a card.
+ *
+ * ⚠️ This started as a row and did not work. A row makes a column of amounts,
+ * which is exactly right for a list of movements you scan looking for one — but
+ * an account is not scanned, it is *read*: half a dozen of them, each a name and
+ * a number that deserves to be legible. Squeezing name, type, balance and three
+ * controls into 390 pixels of one line left nothing readable.
+ *
+ * So the rule in DESIGN.md is now narrower than "rows for money": **rows for
+ * lists you scan, cards for a handful of things you read**.
+ */
+function AccountCard({
   account,
-  first,
   onEdit,
+  onReconcile,
 }: {
   account: Account
-  first: boolean
   onEdit: () => void
+  onReconcile: () => void
 }) {
   async function toggleArchive() {
     // ⚠️ There is no delete. An account holds the history of its movements, and
@@ -131,46 +142,53 @@ function AccountRow({
     await api.updateAccount(account.id, { is_archived: !account.is_archived })
   }
 
+  const archiveLabel = account.is_archived
+    ? `Ripristina ${account.name}`
+    : `Archivia ${account.name}`
+
   return (
     <li
       className={[
-        'flex items-center gap-3 px-5 py-4',
-        first ? '' : 'border-t border-border-soft',
+        'flex flex-col gap-2 rounded-card border border-border-soft bg-surface-card p-4 shadow-card',
         account.is_archived ? 'opacity-60' : '',
       ].join(' ')}
     >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body text-ink-1">{account.name}</p>
-        <p className="truncate text-caption text-ink-2">
-          {KIND_LABELS[account.kind]}
-          {account.include_in_net_worth ? '' : ' · fuori dal patrimonio'}
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 truncate text-body text-ink-1">{account.name}</p>
+
+        {/* Pulled into the padding so the controls sit on the card's corner
+            rather than stealing width from the name. */}
+        <div className="-mr-1.5 -mt-1.5 flex shrink-0 items-center">
+          {/* Where you reach when the number does not match the bank. */}
+          <IconButton
+            label={`Aggiorna il saldo di ${account.name}`}
+            onClick={onReconcile}
+            Icon={Scale}
+          />
+          <IconButton label={`Modifica ${account.name}`} onClick={onEdit} Icon={Pencil} />
+          <IconButton
+            label={archiveLabel}
+            onClick={() => void toggleArchive()}
+            Icon={account.is_archived ? ArchiveRestore : Archive}
+          />
+        </div>
       </div>
 
-      {/* Amounts live in the same place on every row, right aligned and
-          tabular: that is what lets a column of them be read at a glance. */}
-      <p className="num shrink-0 text-body text-ink-1">{formatMoney(account.balance_cents)}</p>
+      {/* The number is what the card is for, so it gets the room. Red when
+          negative: an account in the red is worth noticing without doing the
+          arithmetic of reading a minus sign. */}
+      <p
+        className={`num text-title ${
+          account.balance_cents < 0 ? 'text-money-expense' : 'text-ink-1'
+        }`}
+      >
+        {formatMoney(account.balance_cents)}
+      </p>
 
-      <button
-        type="button"
-        onClick={onEdit}
-        aria-label={`Modifica ${account.name}`}
-        className="grid size-9 shrink-0 place-items-center rounded-pill text-ink-3 transition-colors duration-200 hover:bg-surface-hover hover:text-ink-1"
-      >
-        <Pencil size={18} strokeWidth={2} aria-hidden />
-      </button>
-      <button
-        type="button"
-        onClick={() => void toggleArchive()}
-        aria-label={account.is_archived ? `Ripristina ${account.name}` : `Archivia ${account.name}`}
-        className="grid size-9 shrink-0 place-items-center rounded-pill text-ink-3 transition-colors duration-200 hover:bg-surface-hover hover:text-ink-1"
-      >
-        {account.is_archived ? (
-          <ArchiveRestore size={18} strokeWidth={2} aria-hidden />
-        ) : (
-          <Archive size={18} strokeWidth={2} aria-hidden />
-        )}
-      </button>
+      <p className="truncate text-caption text-ink-2">
+        {KIND_LABELS[account.kind]}
+        {account.include_in_net_worth ? '' : ' · fuori dal patrimonio'}
+      </p>
     </li>
   )
 }
