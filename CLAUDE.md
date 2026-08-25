@@ -1,0 +1,804 @@
+# CLAUDE.md
+
+> Stato: **nessuna riga di codice.** Nel repository ci sono solo questo file,
+> [`README.md`](README.md) e il piano in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md).
+> Il design non è ancora stato prodotto.
+>
+> Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
+> **i motivi per cui sono state prese così**. Finché il codice non esiste, quello che c'è
+> scritto qui sono vincoli per il codice che verrà, non descrizioni di codice che c'è: dove
+> una regola parla di un file (`domain/stats.py`, `lib/money.ts`) sta dicendo *dove quella
+> cosa dovrà stare*, non che ci sia già.
+>
+> Il piano in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md) descrive le intenzioni e le
+> milestone; questo file descrive le regole. Quando il codice comincerà a esistere, questo
+> file avrà ragione sul piano — perché il piano racconta cosa volevamo e questo cosa c'è.
+> Se trovi una divergenza, segnalamela.
+>
+> `DEVELOPER.md`, la spiegazione dell'architettura per un essere umano che arriva nuovo sul
+> codice, si scrive dopo M1: prima non avrebbe niente da raccontare.
+
+## Cos'è questo progetto
+
+**Wallet** — web app per il **controllo della finanza personale**. Registra i movimenti su
+N conti, tiene i trasferimenti fra un conto e l'altro, li categorizza, e da lì ricava
+saldi, patrimonio e grafici.
+
+Il nome del prodotto è **Wallet**, e si scrive così ovunque: wordmark, `<title>`, titolo
+dell'API. La cartella del repository si chiama `wallet-dashboard` per ragioni storiche; il
+prodotto no.
+
+Progetto personale, singolo sviluppatore, un solo utente. Priorità: farlo funzionare bene
+per una persona prima di pensare a scalare.
+
+**Uso reale: due momenti diversi, e l'app deve servirli entrambi.**
+
+1. **Trenta secondi in piedi, appena pagato.** Registrare una spesa deve costare tre
+   tocchi: importo, categoria, salva. Il conto è quasi sempre lo stesso, la data è quasi
+   sempre oggi, e ogni campo che chiede attenzione qui è un campo per cui prima o poi
+   smetterai di registrare le spese. **Un'app di finanza personale muore di attrito
+   all'inserimento, non di mancanza di funzionalità.**
+2. **Mezz'ora tranquilla a fine mese.** Guardare dove sono finiti i soldi, confrontare col
+   mese prima, vedere il patrimonio salire o scendere. Qui servono i grafici, i filtri e
+   la calma.
+
+Tutto il prodotto ruota attorno a questi due momenti, e sono in tensione fra loro: il
+primo vuole meno campi possibili, il secondo vuole dati completi. Dove sono in conflitto,
+**vince il primo**: un dato mancante si corregge a fine mese, un dato mai registrato è
+perso per sempre.
+
+## Obiettivi e non-obiettivi
+
+**Obiettivi (V1)**
+- Registrare spese ed entrate su più conti, in pochi secondi
+- Modellare i trasferimenti fra conti senza che vengano scambiati per spese
+- Categorizzare i movimenti e correggerne la categoria dopo
+- Sapere quanto c'è su ogni conto e quanto vale il totale, oggi e nel tempo
+- Mostrare dove finiscono i soldi: per categoria, nel tempo, rispetto al mese scorso
+- Un obiettivo di risparmio mensile, da confrontare col reale
+
+**Non-obiettivi (per ora)**
+- App mobile nativa
+- Collegamento automatico alla banca (PSD2/open banking): sono servizi a pagamento, e il
+  vincolo di questo progetto è che resti gratuito
+- Import di estratti conto e movimenti ricorrenti → **V1.5**, non V1
+- Investimenti, crypto, immobili → **V2**, ma il modello della V1 deve poterli accogliere
+- Budget con tetti per categoria: c'è **solo** l'obiettivo di risparmio complessivo
+- Multivaluta: **V1 è solo euro**, dichiarato e non aggirato
+- Account separati, ruoli o permessi: oggi c'è **un utente solo**
+
+## Stack
+
+Identico a quello di un altro progetto personale già in produzione su Vercel, e questa non
+è pigrizia: è uno stack di cui conosco già le trappole, e ogni pezzo qui sotto ha una
+motivazione che vale anche per questo dominio.
+
+| Livello | Scelta | Perché |
+|---|---|---|
+| Frontend | React + TypeScript + Vite + Tailwind CSS | Mobile-first: le spese si registrano dal telefono, i grafici si guardano dal PC. Niente Next.js, il backend è Python e il rendering server-side non servirebbe a nulla |
+| Backend | Python + FastAPI, Pydantic | È il linguaggio che padroneggio meglio |
+| ORM / migrazioni | SQLAlchemy 2.0 + Alembic | |
+| Database | Postgres su Neon (free tier) | Dati fortemente relazionali e aritmetica esatta: gli importi sono interi in centesimi e i saldi sono somme, cioè esattamente quello che un relazionale fa senza sbagliare. Neon anziché Supabase perché il free tier di Supabase mette il progetto in pausa dopo una settimana e va riattivato a mano, Neon si risveglia da solo |
+| Hosting | Vercel Hobby: statico + FastAPI come serverless function | **Vincolo assoluto: deve restare gratuito.** Piano B: backend su Render free tier |
+| Autenticazione | Magic link via email, sessione ~30 giorni | Nessuna password da ricordare da telefono |
+| Email | API transazionale di Brevo (300/giorno gratis) | Zero costi e **nessun dominio da verificare**: basta un singolo mittente confermato |
+| Grafici | Recharts | Approvata esplicitamente, ed è l'**unica** dipendenza nuova rispetto allo stack sorgente. Vedi la sezione "I grafici" per i vincoli d'uso |
+
+**Nessun LLM in V1** — vedi la sezione dedicata più sotto.
+
+## Comandi
+
+⚠️ **Non ancora verificati**: valgono da M0 in poi, e a valle di M0 questa sezione va
+riscritta con quello che funziona davvero. Il frontend sarà un **npm workspace**: `npm` si
+lancia dalla radice, non da `frontend/`.
+
+```bash
+# installazione (una tantum)
+python -m venv .venv && .venv\Scripts\activate
+pip install -r requirements-dev.txt
+npm install
+
+# dev server backend — http://127.0.0.1:8000, docs su /api/docs
+cd backend && uvicorn app.main:app --reload
+
+# dev server frontend — http://localhost:5173, proxy /api verso uvicorn
+npm run dev
+
+# build frontend (produce frontend/dist)
+npm run build
+
+# test
+cd backend && pytest
+
+# typecheck frontend
+npm run typecheck
+
+# migrazioni DB — si lanciano a mano dalla tua macchina contro Neon,
+# mai in fase di deploy: su Vercel ogni richiesta è una funzione effimera
+cd backend && alembic upgrade head
+cd backend && alembic revision --autogenerate -m "descrizione in inglese"
+cd backend && alembic downgrade -1
+
+# manutenzione del database — vedi la sezione più sotto
+cd backend && python -m scripts.backup                 # esporta tutto in JSON
+cd backend && python -m scripts.restore FILE.json      # rimette un backup
+cd backend && python -m scripts.doctor                 # controlla lo stato
+cd backend && python -m scripts.prune                  # toglie la spazzatura
+cd backend && python -m scripts.reset --transactions   # svuota, a livelli
+cd backend && python -m scripts.users                  # accessi e sessioni
+cd backend && python -m scripts.merge_categories A B   # fonde due categorie
+cd backend && python -m scripts.seed_demo              # dati di prova
+```
+
+Non lanciare comandi che non sono elencati qui senza chiedere prima.
+
+## Struttura del repository
+
+Questa è la struttura da costruire, non quella che c'è.
+
+```
+backend/app/models/     SQLAlchemy
+backend/app/schemas/    Pydantic, input e output delle API
+backend/app/api/        router HTTP: auth, accounts, categories, transactions, stats
+backend/app/domain/     logica di business pura (money, period, balances, stats)
+backend/migrations/     Alembic
+backend/scripts/        manutenzione del database, da lanciare a mano
+backend/tests/          pytest, concentrati su domain/
+frontend/src/features/  una cartella per area: dashboard, transactions, accounts,
+                        categories, settings
+frontend/src/api/       client tipizzato verso il backend + cache delle letture
+frontend/src/lib/       helper trasversali (money.ts, period.ts, validation.ts,
+                        online.ts, pwa.ts)
+frontend/src/styles/    tokens.css (design system) + index.css
+frontend/public/        asset serviti tali e quali: icone, manifest, sw.js
+api/index.py            entrypoint Vercel, monta l'app FastAPI
+requirements.txt        dipendenze Python di runtime (le legge Vercel, sta in root)
+vercel.json             build del frontend + routing verso la function Python
+docs/plan/              il piano di progetto
+docs/design/            DESIGN.md, il design system — ⚠️ non esiste ancora
+```
+
+## Il denaro
+
+È la parte in cui un'app di questo tipo sbaglia per sempre e in silenzio, quindi viene
+prima di tutto il resto.
+
+⚠️ **Gli importi sono interi in centesimi ovunque: database, API, stato del frontend.**
+`amount_cents`, `BigInteger`. Mai un `float`, e nemmeno un `NUMERIC` che poi qualcuno legge
+dentro un float da qualche parte lungo il tragitto. In virgola mobile `0.1 + 0.2` fa
+`0.30000000000000004`, e su un anno di movimenti diventa un saldo che non torna con la
+banca per due centesimi e un pomeriggio buttato a cercare dove.
+
+**Con gli interi il problema smette di esistere lungo tutto il percorso.** Un intero
+attraversa JSON senza perdere niente e resta esatto anche in JavaScript, dove i numeri sono
+sì float64 ma rappresentano gli interi esattamente fino a 2^53 — in centesimi, novantamila
+miliardi di euro. Quindi **il frontend può sommare**, e lo fa: totali di una selezione,
+percentuali di una fetta, differenze fra due periodi si calcolano dove servono, senza dover
+chiedere al server un numero che è una somma di dati che ha già in mano.
+
+⚠️ **Il frontend somma, ma non decide cosa sommare.** L'aritmetica è aritmetica; la regola
+"un trasferimento non è una spesa" resta del dominio, arriva già applicata nei dati o nei
+campi che il server espone, e non si riscrive in un componente. La riga da non passare non
+è la somma, è la classificazione.
+
+⚠️ **La parola "centesimi" non deve mai arrivare all'utente.** È una rappresentazione
+interna e basta: si scrive `12,50` e si legge `12,50 €`, in ogni campo, ogni etichetta,
+ogni messaggio di errore, ogni esportazione. Le due conversioni vivono in `domain/money.py`
+e in `frontend/src/lib/money.ts`, e da nessun'altra parte.
+
+⚠️ **La divisione per 100 avviene solo dentro il formattatore.** Nel momento in cui dividi
+ottieni un float e hai buttato via la ragione per cui usavi gli interi. Si somma in
+centesimi, si confronta in centesimi, si ordina in centesimi: `formatMoney(cents)` è l'unico
+punto che produce una stringa in euro, ed è l'ultimo passo prima dello schermo.
+
+⚠️ **E il parsing non è `parseFloat(testo) * 100`.** `19.99 * 100` in virgola mobile fa
+`1998.9999999999998`: troncato diventa `19,98`, cioè un centesimo perso su una buona parte
+degli importi che scriverai. La conversione lavora sulle **cifre** — parte intera e parte
+decimale separate dal separatore, decimali riempiti o troncati a due, poi concatenate — e
+non passa mai da un numero con la virgola. È il bug classico di questo modello e merita un
+test suo.
+
+**Un effetto collaterale che vale la pena avere**: un intero si comporta allo stesso modo su
+Postgres e su SQLite, quindi la suite di test non può passare mentendo su una precisione che
+in produzione non c'è. Con i decimali sarebbe successo: SQLite non ha un tipo decimale
+nativo e SQLAlchemy ripiega sui float.
+
+⚠️ **Quando un importo si spezza in parti** — le percentuali di una torta, una media, una
+divisione — **il resto va sull'ultima parte**. Arrotondando ogni pezzo per conto suo la somma
+delle fette non fa più il totale, e in un grafico si vede a occhio.
+
+⚠️ **L'importo è sempre positivo, il segno lo porta il `kind`.** Un movimento è `expense`,
+`income` o `transfer`; non esiste un importo negativo. Se il segno stesse nell'importo,
+ogni somma della codebase avrebbe un `abs()` da ricordare, e prima o poi ci sarebbe un
+`-0` da qualche parte. Il segno è una proprietà del *tipo* di movimento, non del numero.
+
+⚠️ **Un movimento ha una data, non un istante.** Colonna `date`, non `timestamp`: una spesa
+è "il 12 marzo", e trasformarla in un istante significa portarsi dietro i fusi orari in
+un'app che gira su un telefono in viaggio, con il risultato che una spesa di mezzanotte
+finisce nel mese sbagliato. `created_at` esiste, è un timestamp, ed è metadato: non entra
+mai in un raggruppamento per periodo.
+
+**La formattazione e il parsing stanno in un posto solo**: `domain/money.py` lato server e
+`frontend/src/lib/money.ts` lato client, che ne è lo specchio. Italiano: separatore
+migliaia `.`, decimale `,`, simbolo dopo con lo spazio — `1.234,56 €`. Il parsing accetta
+quello che una persona scrive davvero: `12,50`, `12.50`, `1.234,56`, con o senza spazi.
+
+⚠️ **Mai `type="number"` legato a `Number(event.target.value)`.** Svuotando la casella il
+valore diventa `0` e si riempie da sola, quindi si può cambiare solo con le frecce; e con
+la virgola decimale italiana il campo numerico del browser si comporta in modo diverso a
+seconda della lingua del sistema. Il valore si tiene **come stringa** mentre lo scrivi, si
+valida a parte con `parseAmountField`, e diventa un intero in centesimi **solo al
+salvataggio**, con la conversione a cifre descritta sopra. Il vuoto si segnala, non si
+corregge: **stringa vuota è un errore, non zero.**
+
+## I conti e i saldi
+
+Un conto (`account`) è un posto dove stanno dei soldi: conto corrente, conto deposito,
+contante, prepagata. Ha un `opening_balance_cents` e una `opening_date` — il punto da cui
+inizi a tenerne traccia.
+
+⚠️ **Il saldo non è una colonna, è una somma.** `saldo = opening_balance + Σ movimenti`,
+sempre, calcolato in `domain/balances.py`. Tenere anche una colonna `balance` da aggiornare
+a ogni scrittura significa avere due numeri che possono contraddirsi, e quando lo faranno
+non saprai quale dei due credere. Il calcolo costa una somma su qualche migliaio di righe:
+niente.
+
+⚠️ **In V1 tutti i conti sono immediati.** Nessun addebito differito, nessun estratto conto
+della carta. Una carta di credito, se servirà, si modella come un conto normale che va in
+negativo e che azzeri a fine mese con un trasferimento dal conto corrente: il caso è
+rappresentabile senza aggiungere un concetto.
+
+**`include_in_net_worth`** esiste perché non tutto quello che vuoi tracciare è tuo
+patrimonio (un conto cointestato, dei soldi che stai tenendo per qualcun altro). Sta sul
+conto, di default è vero, e influenza **solo** il totale del patrimonio: i movimenti di
+quel conto restano nelle statistiche di spesa.
+
+⚠️ **I conti si archiviano, non si cancellano.** Un conto estinto ha ancora dentro la
+storia dei tuoi movimenti, e il grafico del patrimonio del 2025 lo attraversa. Archiviato
+vuol dire: sparisce dai menù di scelta, resta nella storia.
+
+### La riconciliazione
+
+Prima o poi il saldo dell'app e quello della banca non coincideranno, perché una spesa non
+l'hai registrata. Il gesto è "**il saldo vero oggi è X**".
+
+⚠️ **La riconciliazione è un movimento, non una scrittura sul saldo.** L'app calcola la
+differenza fra quello che pensa e quello che le hai detto, e registra un movimento
+`is_adjustment` di quella differenza — `expense` se eri in meno, `income` se eri in più. Il
+saldo resta sempre e solo `opening_balance + Σ movimenti`: una fonte di verità, non due.
+
+⚠️ **Una rettifica muove il saldo e il patrimonio, e non muove le statistiche di spesa.**
+Non è consumo, è la misura di quanto ti eri dimenticato: metterla in "uscite per categoria"
+inventerebbe una spesa che non sai dove sia andata, e falsare la torta è peggio che
+ammettere il buco. Ha `category_id` nullo e viene esclusa da ogni aggregazione di spesa;
+nell'elenco dei movimenti si vede eccome, distinta dalle altre.
+
+Se le rettifiche diventano grosse e frequenti, non è un problema dell'app: è il segnale che
+stai smettendo di registrare le spese. L'app deve dirlo, non nasconderlo.
+
+## Le categorie
+
+Elenco **libero e a un solo livello**, che gestisci tu: nome, colore, icona, posizione.
+Niente sottocategorie — sono la cosa che sembra ordinata il primo giorno e che dopo tre
+mesi ti fa esitare fra "Cibo > Spesa" e "Casa > Spesa" ogni volta che registri.
+
+⚠️ **Due elenchi separati, uno per le uscite e uno per le entrate** (`kind` `expense` /
+`income`). "Stipendio" non deve comparire fra le categorie di spesa, e un grafico non deve
+poter mescolare le due liste. Il nome è unico per household e per segno, **senza distinzione
+di maiuscole**, con un indice sul database a garantirlo.
+
+⚠️ **Le categorie si archiviano, non si cancellano.** I movimenti passati le referenziano, e
+i confronti mese su mese e anno su anno le leggono: cancellare la riga porterebbe via anche
+la storia. Archiviata vuol dire: non si può più scegliere, continua a comparire nei grafici
+del passato.
+
+**Un trasferimento non ha categoria**, e non è una dimenticanza: vedi sotto.
+
+**Rinominare una categoria si propaga** ovunque, perché il nome sta sulla categoria e non è
+copiato nei movimenti. Fondere due categorie doppione l'app non lo sa fare: c'è lo script
+`merge_categories`.
+
+## I movimenti
+
+Tre tipi, una tabella sola:
+
+| `kind` | Cosa | Campi |
+|---|---|---|
+| `expense` | soldi che escono | `account_id`, `category_id` |
+| `income` | soldi che entrano | `account_id`, `category_id` |
+| `transfer` | soldi che si spostano | `account_id` (da), `counter_account_id` (a), **nessuna categoria** |
+
+⚠️ **Un trasferimento è una riga sola, non due.** La partita doppia — una riga in uscita sul
+conto A e una in entrata sul conto B — è la scelta "corretta" da manuale di contabilità, e
+qui è quella sbagliata: raddoppierebbe le righe di ogni elenco, obbligando ogni schermata e
+ogni statistica a filtrarne metà, e basta dimenticarsene una volta perché lo stipendio
+spostato sul deposito diventi un'entrata da 1.800 €. Con una riga sola e due colonne, **"un
+trasferimento non è una spesa" è una verità strutturale** e non una regola da ricordare.
+
+⚠️ **I trasferimenti non entrano mai in entrate, uscite, risparmio o patrimonio.** Spostare
+soldi da un conto all'altro non cambia quanto ne hai: i due conti si muovono in direzioni
+opposte e il totale resta identico. È **l'errore che rende inutile un cruscotto di finanza
+personale**, perché lo stipendio che smisti fra tre conti si presenterebbe come tre entrate
+e tre uscite, e ogni numero della dashboard sarebbe gonfio a caso. Il test che lo dimostra è
+quello che non si tocca.
+
+Un trasferimento non può avere lo stesso conto da entrambe le parti, e un `CHECK` sul
+database lo garantisce insieme alla regola "categoria se e solo se non è un trasferimento".
+
+**L'inserimento rapido** è la schermata più importante dell'app: importo, categoria, salva.
+Il conto è preselezionato sull'ultimo usato, la data su oggi, la descrizione è facoltativa.
+Tutto il resto (cambiare conto, retrodatare, aggiungere una nota) è raggiungibile ma non è
+sulla strada.
+
+⚠️ **La descrizione è facoltativa e resta tale.** Renderla obbligatoria "per avere dati
+migliori" è esattamente il campo che a marzo ti fa dire "poi la metto" e ad aprile ti fa
+smettere.
+
+## I periodi e le statistiche
+
+**Il periodo di default è il mese solare**, dal primo all'ultimo giorno. I grafici però
+accettano un intervallo qualsiasi — ultimi 30 giorni, trimestre, anno, da–a — e il confronto
+naturale è **col periodo precedente della stessa lunghezza**.
+
+⚠️ **L'aritmetica sulle date sta in un posto solo**: `backend/app/domain/period.py` e il suo
+specchio `frontend/src/lib/period.ts`. Inizio e fine di un mese, periodo precedente, elenco
+dei mesi fra due date, etichette ("marzo 2026"). Non fare calcoli di date altrove: è il tipo
+di codice che diverge in silenzio, e quando diverge un movimento del 31 finisce in due mesi
+o in nessuno.
+
+**Cosa entra in cosa** — da tenere in un punto solo del dominio, perché è la definizione su
+cui poggia ogni numero mostrato:
+
+| Numero | Include | Esclude |
+|---|---|---|
+| Uscite del periodo | `expense` | trasferimenti, rettifiche |
+| Entrate del periodo | `income` | trasferimenti, rettifiche |
+| Risparmio del periodo | entrate − uscite | trasferimenti, rettifiche |
+| Saldo di un conto | tutto ciò che tocca quel conto, rettifiche comprese | niente |
+| Patrimonio | somma dei saldi dei conti con `include_in_net_worth` | niente |
+
+⚠️ **Le aggregazioni si fanno in Python, non in SQL**, e questa è una scelta di scala
+dichiarata. Il vincolo architetturale del progetto è che `domain/` non importi nulla di
+SQLAlchemy: il router carica i movimenti del periodo, `domain/stats.py` li somma. Un anno di
+uso reale sono circa 1.500 movimenti, cinque anni 7.500: sommarli in memoria costa
+millisecondi, e in cambio ogni regola di cosa-conta-e-cosa-no è una funzione pura che si
+testa senza alzare un database. Questo non vieta al frontend di fare aritmetica sui dati che
+ha già — sono interi, sommarli è esatto: vieta di **ridefinire lì** cosa conta come spesa.
+
+**Dove smette di valere**: oltre le decine di migliaia di righe l'aggregazione va spostata in
+SQL. Quando succederà, la definizione della tabella qui sopra deve restare in un posto solo —
+altrimenti "spesa del mese" comincia a significare due cose leggermente diverse a seconda di
+chi la chiede, che è il modo peggiore in cui questo genere di app si rompe.
+
+⚠️ **La paginazione dei movimenti invece è vera da subito.** L'elenco cresce per sempre, e si
+pagina con un **keyset** su `(date DESC, id DESC)`, non con `OFFSET`: registrare una spesa di
+un mese fa farebbe scorrere tutte le pagine successive sotto le dita di chi sta leggendo, con
+righe che si ripetono e righe che spariscono.
+
+## I grafici
+
+**Recharts è approvata** ed è l'unica dipendenza nuova rispetto allo stack di partenza. Due
+vincoli d'uso:
+
+- ⚠️ **I colori escono solo dai token del design system.** Nessuna palette di default,
+  nessun colore scritto nel componente. Quando arriverà `docs/design/DESIGN.md`, i colori
+  delle serie saranno token come tutti gli altri; finché non arriva, non inventarne.
+- **La libreria si ridisegna, non si usa com'è.** Griglie, assi, tooltip e legende di default
+  hanno un aspetto suo che non c'entrerà niente col resto dell'app: vanno spogliati fino a
+  somigliare al design system, non il contrario.
+
+**Cosa mostra la V1** (dettaglio e motivazioni in `docs/plan/plan-v1.md`): saldi per conto
+con totale e ultimi movimenti, uscite per categoria nel periodo, andamento
+entrate/uscite/differenza mese per mese, patrimonio a fine mese, confronto col mese
+precedente, le cinque uscite più grandi, spesa media giornaliera con proiezione a fine mese.
+
+⚠️ **Ogni grafico è un punto di partenza, non un quadro.** Da una fetta della torta si deve
+poter scendere ai movimenti che la compongono: un numero che non si può aprire è un numero di
+cui non ti fiderai, e il primo istinto davanti a "Trasporti 340 €" è "e da dove esce?".
+
+⚠️ **Un periodo senza dati si dice, non si disegna.** Un grafico vuoto con gli assi a zero si
+legge come "hai speso zero", che è diverso da "non hai registrato niente".
+
+## Design
+
+⚠️ **Il design system non esiste ancora.** `docs/design/DESIGN.md` verrà prodotto a parte e
+consegnato: quando arriverà, sarà la fonte di verità per palette, tipografia, forme,
+iconografia e tono di voce, e questa sezione andrà riscritta puntando lì.
+
+Fino ad allora: **non inventare uno stile**. Non scegliere una palette, non introdurre
+componenti "provvisori" che poi restano. Quello che è già deciso e che il design non
+cambierà:
+
+- **I token stanno in `frontend/src/styles/tokens.css`**, definiti una volta sola, nel blocco
+  `@theme` di **Tailwind 4** (niente `tailwind.config.js`, in Tailwind 4 non esiste). Nei
+  componenti solo classi Tailwind: **nessun valore arbitrario sparso**. Se serve un colore o
+  una spaziatura che non è un token, prima si discute se aggiungerlo al design system.
+- **Mobile-first.** La schermata di riferimento è un telefono, tenuto con una mano sola, in
+  piedi.
+- **Copy in italiano, sentence case**, seconda persona informale. **Niente emoji** nei testi
+  di prodotto.
+- **Numeri con virgola decimale**, separatore delle migliaia, simbolo dell'euro dopo con lo
+  spazio: `1.234,56 €`.
+- **Navigazione proposta**: quattro sezioni — **Riepilogo, Movimenti, Conti, Analisi** — più
+  il profilo, che su desktop sta in fondo alla sidebar e su mobile è una quinta scheda. Le
+  categorie si gestiscono dalle impostazioni, non sono una sezione: le tocchi due volte
+  l'anno. Da riconfermare col design.
+- **L'aggiunta di un movimento è sempre a portata di pollice**, da qualunque sezione. È
+  l'unica azione che ha diritto a un posto fisso sullo schermo.
+
+## Pagina di diagnostica
+
+`/_stato` mostra lo stato di frontend, API e database, più i token del design system. Non è
+linkata da nessuna parte nell'app: ci si arriva solo digitando l'URL.
+
+**Sta fuori dal login di proposito.** Accedere richiede il database, quindi metterla dietro
+la sessione la renderebbe irraggiungibile proprio quando il database è la cosa rotta. Il
+rischio di divulgazione si chiude a monte: `/api/health` deve restituire `detail` **solo
+quando qualcosa non va**, così a sistema sano non pubblica la versione di Postgres.
+
+⚠️ E qui, a maggior ragione, **non deve mai comparire un dato di dominio**: niente conteggi
+di movimenti, niente saldi, niente nomi di conti.
+
+## PWA
+
+L'app si installa sulla home e parte a schermo pieno. I pezzi stanno in `frontend/public/`:
+`manifest.webmanifest`, le icone, e `sw.js`.
+
+**Il service worker si scrive a mano**, non con `vite-plugin-pwa`: sono un centinaio di righe
+commenti compresi, e la libreria porterebbe Workbox più un'integrazione col build per
+risolvere problemi che qui non ci sono. Se un giorno servono precache manifest e prompt di
+aggiornamento, quel file si butta e si prende la libreria.
+
+Le strategie sono per tipo di risorsa, e una di queste è "nessuna":
+
+| Cosa | Strategia |
+|---|---|
+| **`/api/*`** | **mai toccato** |
+| navigazioni | rete, poi la shell dalla cache |
+| `/assets/*` | cache, poi rete — Vite ci mette l'hash nel nome |
+| icone, manifest, font | dalla cache e aggiornati dietro |
+
+⚠️ **`/api` è escluso di proposito e non va incluso.** Sono risposte autenticate e sempre
+fresche; qui sono anche il quadro completo delle tue finanze. Metterle in una cache che
+sopravvive al logout significherebbe servire i saldi di una sessione chiusa a chi apre l'app
+dopo. La cache delle letture c'è già, sta in `api/cache.ts`, ed è **in memoria** — muore con
+la pagina, che è esattamente quello che si vuole.
+
+⚠️ **Offline non è un obiettivo, e l'inserimento offline nemmeno.** È stato valutato e
+scartato per la V1: una coda locale di movimenti da spedire quando torna la rete è il pezzo
+più delicato di tutto il progetto (duplicati, conflitti, righe che non si possono modificare
+finché non hanno un id) e non si costruisce prima che l'app esista. Il service worker serve
+la shell così l'app si apre invece di dare l'errore del browser, e `lib/online.ts` alza una
+fascia che dice che sei senza rete.
+
+Il service worker **si registra solo in produzione** (`import.meta.env.PROD` in `main.tsx`):
+in sviluppo servirebbe il bundle di ieri e ogni modifica sembrerebbe non applicata.
+
+**Su iOS i meta contano ancora**: `apple-mobile-web-app-capable` è ciò che fa partire davvero
+a schermo pieno, il `display` del manifest non basta. Status bar `default`, non
+`black-translucent`, altrimenti il contenuto finisce sotto l'orologio.
+
+⚠️ **Il campo "incolla il link" nella schermata di accesso serve solo in standalone.** Su iOS
+un'app aggiunta alla home ha uno spazio dati separato da Safari: il magic link apre Safari, la
+sessione nasce lì, e l'app installata resta scollegata — senza barra degli indirizzi da cui
+rimediare. Il campo spende il token dentro l'app. In una scheda del browser toccare il link
+funziona, quindi lì il campo non compare: il riconoscimento sta in `lib/pwa.ts`. Il
+copia-invece-di-aprire non è negoziabile: il token si usa una volta sola e chi lo tocca primo
+vince.
+
+## Autenticazione
+
+Magic link, nessuna password. Le regole da non violare:
+
+- **`/request-link` risponde sempre allo stesso modo.** Dire a un indirizzo che non è
+  abilitato trasformerebbe l'endpoint in un modo per scoprire chi ha accesso. Solo i log
+  distinguono i casi.
+- **`/verify` è una POST, mai una GET.** I provider di posta aprono i link per analizzarli:
+  con una GET uno scanner brucerebbe il token monouso prima del destinatario. Il link porta a
+  una pagina che fa la POST via JavaScript, che gli scanner non eseguono.
+- **I token non si salvano mai in chiaro**, solo il loro SHA-256. Vale per i link e per le
+  sessioni.
+- **La sessione è un token opaco**, non un JWT: revocarla è un `UPDATE`, e "esci da tutti i
+  dispositivi" è lo stesso `UPDATE` senza filtro sull'id.
+- **Chi può entrare** sta in `ALLOWED_EMAILS`. Al primo accesso l'utente entra nell'unico
+  household, seminato dalla migrazione iniziale.
+- La tabella si chiama `app_user` e non `user` perché `user` è una parola riservata di
+  Postgres e andrebbe messa fra virgolette a ogni query.
+
+### La sessione lunga, e perché qui va motivata meglio
+
+Trenta giorni sono una scelta di comodità: l'app si apre più volte al giorno da un telefono, e
+un login a ogni apertura la ucciderebbe. Ma **il rischio va detto per quello che è**: questo
+database contiene il quadro completo delle finanze di una persona — dove ha i soldi, quanti
+sono, e cosa compra. Non è un dato come un altro.
+
+Il rischio accettato è "qualcuno con il telefono sbloccato in mano apre l'app", lo stesso di
+un'app bancaria lasciata aperta. Quello che **non** è accettato, e quindi è obbligatorio:
+
+- cookie `httpOnly` + `Secure` + `SameSite`, mai il token in `localStorage`;
+- link di accesso **monouso e valido 15 minuti** — quello vive in una casella email, ed è
+  l'anello debole vero;
+- refresh scorrevole della sessione a ogni uso, così i 30 giorni contano dall'ultimo uso e non
+  dal login;
+- **"esci da tutti i dispositivi"** raggiungibile in due tocchi dal profilo, non nascosto;
+- nessun importo, nessun saldo e nessun indirizzo email nei log.
+
+Se un giorno la superficie non basterà, la mossa non è accorciare la sessione: è un blocco
+locale (PIN o biometria) davanti all'apertura dell'app. Non è in V1.
+
+## Proprietà dell'utente
+
+Due categorie, con criteri diversi su dove metterle:
+
+- **Colonna vera** per ciò che si mostra, si ordina o si cerca: `display_name` sta qui. Il
+  fallback "nome, altrimenti email" vive lato server nella proprietà `User.label` ed è esposto
+  nell'API come campo `label`, così la regola non viene riscritta in ogni componente e non può
+  divergere.
+- **`preferences`, campo JSON** per le impostazioni di interfaccia: cambiano spesso, si
+  leggono sempre in blocco e non si interrogano mai per chiave, quindi una colonna ciascuna
+  significherebbe una migrazione per ogni casella di spunta. La forma è comunque validata da
+  `schemas/user.UserPreferences`: aggiungere una preferenza è **un campo tipizzato in quella
+  classe, senza migrazione**.
+
+`UserPreferences` accetta chiavi sconosciute di proposito: un frontend più recente può salvare
+un'impostazione prima che il backend la dichiari, e un rollback non cancella in silenzio
+quello che avevi impostato. La `PATCH /api/auth/me` **fonde** le preferenze invece di
+sostituirle.
+
+⚠️ **Le impostazioni che riguardano i soldi non vanno qui.** L'obiettivo di risparmio mensile,
+il conto preselezionato, la valuta: sono proprietà dell'**household**, non della persona.
+`preferences` è personale, e il giorno in cui l'app diventa condivisa una preferenza personale
+non deve poter cambiare i numeri che vede l'altro.
+
+**L'obiettivo di risparmio** è un campo su `household` (`monthly_savings_target_cents`), non
+una tabella: c'è un valore solo e i mesi passati si confrontano con quello corrente. È una
+semplificazione consapevole — se un giorno servirà la storia dell'obiettivo diventa una
+tabella con `valid_from`, e i mesi passati smetteranno di cambiare valutazione ogni volta che
+alzi l'asticella.
+
+## Vocabolari chiusi
+
+Stanno in `backend/app/domain/vocabulary.py` e sono rispecchiati in
+`frontend/src/api/client.ts`. Sono chiusi perché sono **struttura**, non contenuto:
+aggiungere un valore richiede di decidere cosa fa il resto del codice quando lo incontra.
+
+- **Tipo di movimento**: `expense`, `income`, `transfer`
+- **Tipo di conto**: corrente, deposito, contante, prepagata
+- **Tipo di categoria**: `expense`, `income`
+
+⚠️ **Le categorie invece sono aperte** e le gestisci tu: sono contenuto. Non metterle qui, non
+seminarle nel codice, non trattarle come un enum.
+
+## Manutenzione del database
+
+Stanno in `backend/scripts/`, si lanciano con `python -m scripts.<nome>`, e servono a non
+dover entrare a mano nella console di Neon — che è il posto con meno rete di sicurezza per
+fare l'operazione più delicata.
+
+**Tutti gli script distruttivi sono una prova a vuoto per default**: stampano cosa farebbero e
+non scrivono niente finché non aggiungi `--apply`. Tutti dicono a quale database stanno
+parlando prima di fare qualsiasi cosa. `reset --all` e `restore` chiedono in più di scrivere
+il nome dell'household.
+
+| Script | A cosa serve |
+|---|---|
+| `backup` | esporta tutto in JSON. **Il più importante di tutti**, vedi sotto |
+| `restore` | rimette un backup. **Solo in sostituzione**, mai in fusione |
+| `doctor` | controlla migrazione, movimenti orfani, trasferimenti rotti, importi a zero, categorie di segno sbagliato, saldi che non tornano con l'ultima riconciliazione; `--fix` ripara solo quelle sicure |
+| `prune` | token e sessioni morti, categorie e conti archiviati che non usa più nessuno |
+| `reset` | svuota a livelli: `--transactions`, `--categories`, `--accounts`, `--all` |
+| `users` | chi ha accesso, e revoca delle sessioni |
+| `merge_categories` | fonde due categorie che sono la stessa cosa |
+| `seed_demo` | qualche mese di movimenti finti, per avere grafici da guardare mentre li costruisci |
+
+⚠️ **`backup` qui vale più che in qualsiasi altro progetto.** Non è "dati inseriti a mano che
+sarebbe noioso rifare": **le spese di marzo non si ricostruiscono**. Non esistono da
+nessun'altra parte se non, parzialmente, in un estratto conto che l'app non sa leggere. Il
+free tier di Neon non conserva backup a lungo. Va lanciato con una cadenza vera, e deve
+esistere **da M2**, cioè dal primo momento in cui c'è un dato che vale qualcosa — non alla
+fine del progetto.
+
+⚠️ **`backup-*.json` va in `.gitignore`.** Contiene tutti i tuoi movimenti, i saldi e
+l'indirizzo email, e il nome di default finisce nella cartella da cui lanci — cioè dentro il
+repository.
+
+⚠️ **Le cancellazioni sono esplicite, non affidate ai `CASCADE`.** I test girano su SQLite,
+che le foreign key non le applica se non gliel'hai detto, mentre la produzione è Postgres: uno
+svuotamento che si appoggiasse al database si comporterebbe diversamente nei due posti.
+
+⚠️ **`reset --accounts` e `reset --categories` tirano dentro i movimenti**, e lo devono dire:
+un conto non si può cancellare finché un movimento lo nomina, e un movimento senza conto non
+significa niente.
+
+⚠️ **`users` non decide chi può entrare**: quello è `ALLOWED_EMAILS`, che sta nell'ambiente su
+Vercel. Cancellare la riga non chiude niente — il prossimo magic link ricrea l'utente.
+
+## Invio email (Brevo)
+
+Tutto passa da `backend/app/mail/sender.py`. Tre cose da non toccare:
+
+- **Lo `user-agent` esplicito è obbligatorio.** Brevo sta dietro Cloudflare, che risponde
+  `403 browser_signature_banned` alla firma predefinita di `urllib` (`Python-urllib/3.x`).
+  Senza quell'header ogni magic link fallisce in silenzio. Ci vuole un test di regressione
+  apposta, perché è un header invisibile e facile da perdere.
+- **Chiave API v3** (`xkeysib-`), non quella SMTP (`xsmtpsib-`).
+- **`MAIL_FROM` verificato su Brevo.** L'API accetta anche un mittente non verificato senza
+  errori, ma poi il messaggio fallisce SPF/DKIM e finisce nello spam: sembra funzionare e non
+  arriva.
+
+Se `BREVO_API_KEY` o `MAIL_FROM` sono vuote, il link viene stampato sul terminale invece di
+essere inviato: è così che si sviluppa in locale senza account Brevo.
+
+⚠️ **Nell'email non ci va nessun dato finanziario.** Solo il link. Niente saldi, niente
+riepiloghi mensili: la posta è il canale meno protetto che tocchi questo sistema.
+
+## Variabili d'ambiente
+
+| Nome | A cosa serve |
+|---|---|
+| `DATABASE_URL` | Neon, **host pooled** (con `-pooler`) |
+| `ENVIRONMENT` | `development` o `production`; regola il flag `Secure` sul cookie |
+| `ALLOWED_EMAILS` | indirizzi abilitati, separati da virgola |
+| `APP_BASE_URL` | base per costruire il link assoluto nell'email |
+| `BREVO_API_KEY` | se vuota, in sviluppo il link finisce sul terminale |
+| `MAIL_FROM` | mittente verificato su Brevo |
+| `MAIL_FROM_NAME` | `Wallet` |
+
+## Convenzioni di lavoro
+
+- **Pianifica prima di scrivere.** Per qualsiasi task non banale, entra in plan mode, proponi
+  un piano, aspetta la mia approvazione.
+- **Commit piccoli e atomici**, un cambiamento logico per commit. Messaggi in inglese,
+  imperativo ("add transfer endpoint").
+- **Non aggiungere dipendenze senza chiedere.** Se serve una libreria, proponila spiegando
+  cosa risolve e quali alternative hai scartato. Recharts è l'unica già approvata oltre a
+  quelle di base.
+- **Non riscrivere codice che non è oggetto del task.** Se noti un problema altrove, segnalalo
+  a parole invece di sistemarlo di tua iniziativa.
+- **Niente commit automatici**: mostrami il diff, decido io quando committare.
+- Se una richiesta è ambigua, fai una domanda invece di scegliere per me.
+
+## Convenzioni di codice
+
+**Dove vive la logica di business.** `backend/app/domain/` non importa **nulla** di FastAPI né
+di SQLAlchemy: riceve oggetti semplici e restituisce oggetti semplici. I router in `api/`
+traducono HTTP → dominio → HTTP; i modelli SQLAlchemy non contengono logica. È questa
+separazione che rende testabile senza database la parte che può davvero sbagliare — somme,
+saldi, confini di periodo — ed è il vincolo architetturale più importante del progetto.
+
+Nel frontend vale lo stesso principio: i componenti React non contengono regole di dominio, si
+limitano a mostrare ciò che arriva dal backend. **Un componente non decide mai se un movimento
+conta come spesa.**
+
+**Naming.** Python `snake_case`, moduli di dominio con il nome della cosa che calcolano
+(`money.py`, `period.py`, `balances.py`, `stats.py`). Componenti React in `PascalCase`, un
+componente per file. Cartelle di feature al plurale (`features/transactions/`). Nel database:
+tabelle al singolare (`account`, `transaction`), chiavi esterne `<tabella>_id`. **Gli importi
+portano sempre il suffisso `_cents`** (`amount_cents`, `opening_balance_cents`), in ogni
+strato: modello, schema, campo TypeScript. È l'unica cosa che impedisce a un `amount` senza
+suffisso di finire in una somma di euro senza che nessuno se ne accorga.
+
+**Lingua.** Codice, nomi e commenti in inglese; testi rivolti all'utente in italiano.
+
+**Errori.** Il dominio solleva eccezioni proprie e i router le traducono in codici HTTP. Mai
+`except` silenziosi.
+
+**Validazione e sanitizzazione.** Su due livelli, con ruoli diversi:
+
+- **Backend, sempre e comunque.** Pydantic con vincoli espliciti (`gt=0` sugli importi,
+  `min_length`, `max_length`), `extra="forbid"` sugli schemi di scrittura così un campo scritto
+  male fallisce a voce alta invece di sparire, e i testi trimmati da un `field_validator`. È
+  l'unica autorità: il frontend non è un confine di sicurezza.
+- **Frontend, per non far fare sciocchezze all'interfaccia.** Gli helper stanno in
+  `frontend/src/lib/validation.ts` e `frontend/src/lib/money.ts`.
+
+Regola generale: l'input dell'utente si accetta come lo scrive e si normalizza al salvataggio.
+Non si riscrive sotto le dita di chi sta digitando.
+
+**Test.** Si testa `domain/`, dove sta tutta la logica che può sbagliare: somme in centesimi,
+saldi, confini di periodo, aggregazioni, conversione fra testo in euro e centesimi. Non si testano i CRUD banali né
+i componenti React. **Obbligatorio e non negoziabile** il test che dimostra che un
+trasferimento non compare mai fra entrate o uscite, con nessun raggruppamento e in nessun
+periodo. L'elenco completo sta in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md).
+
+**Dati dal server.** Le letture passano da un `useQuery` in `frontend/src/api/cache.ts`, una
+cache stale-while-revalidate scritta a mano: entro una manciata di secondi il dato torna senza
+richiesta, oltre torna subito e si aggiorna in silenzio. Le scritture invalidano da sole il
+prefisso che toccano, **dentro `api/client.ts`**, così chi chiama non può dimenticarsene. Non
+c'è TanStack Query: per una manciata di endpoint sarebbe più configurazione che codice. Se un
+giorno servono retry, paginazione condivisa fra componenti o de-duplica, quel file si butta e
+si sostituisce con la libreria.
+
+⚠️ **La paginazione dei movimenti è l'eccezione**: quella è una lista che cresce, non una
+lettura da rinfrescare. Si tiene per conto suo, con il cursore keyset, e non passa dalla cache
+delle letture.
+
+**Attesa visibile.** Ogni richiesta in primo piano alza `BusyOverlay`, che blocca la pagina.
+Due esclusioni:
+
+- **I refresh in background della cache non contano.** Bloccare la pagina per un aggiornamento
+  che non hai chiesto annullerebbe il senso della cache.
+- **Sotto i 200 ms non compare niente.** Un lampo di "Attendi…" su un salvataggio da 60 ms si
+  legge come un difetto, non come un riscontro.
+
+⚠️ **Il salvataggio di un movimento aspetta il server, e non è ottimistico.** È la differenza
+fra un'app che registra soldi e una che spunta cose da fare: qui una riga che compare
+e poi svanisce perché la richiesta è fallita è un movimento che credi registrato e non lo è, e
+te ne accorgi a fine mese. Mezzo secondo di attesa vale la certezza. Se la scrittura fallisce,
+**il form resta pieno di quello che avevi scritto**: la cosa peggiore che l'app possa fare è
+farti riscrivere l'importo.
+
+## Se il progetto usa un LLM
+
+**In V1 non serve**, e non c'è niente da fargli fare: l'inserimento è manuale e le somme sono
+somme.
+
+Da rivalutare in **V1.5**, dove il candidato vero è uno solo: **categorizzare automaticamente
+le righe di un estratto conto importato**, cioè trasformare `PAGOBANCOMAT 12/03 ESSELUNGA
+MILANO` in "Spesa". Anche lì, prima di un modello si prova la cosa banale — una tabella di
+regole "se la descrizione contiene X allora categoria Y", che impara dalle tue correzioni —
+perché è deterministica, gratuita e per la maggior parte delle righe basta.
+
+Se quel momento arriva, valgono queste regole:
+
+- I prompt vivono in file dedicati e versionati, mai inline sparsi nel codice.
+- Le chiamate al modello passano da un unico modulo, così sono facili da loggare, testare e
+  sostituire.
+- **Nessuna chiave API nel codice o nel frontend.** Solo variabili d'ambiente, chiamate lato
+  server. `.env` sempre in `.gitignore`.
+- L'output del modello non è mai considerato attendibile: va validato contro uno schema prima
+  di essere usato o mostrato.
+- Prevedere sempre un fallback per quando la chiamata fallisce o è lenta.
+- ⚠️ **Un movimento categorizzato da un modello nasce "da confermare"** e **non entra nei
+  grafici** finché non l'hai guardato. Un numero sbagliato con sicurezza in una dashboard è
+  peggio di un numero mancante: sul secondo indaghi, del primo ti fidi.
+- ⚠️ **Non si mandano a un servizio esterno più dati del necessario.** Per categorizzare serve
+  la descrizione della riga, non il saldo del conto né lo storico.
+
+## Cosa non è questa app
+
+**Non è uno strumento di consulenza finanziaria.** Descrive quello che è successo ai tuoi
+soldi; non dice dove metterli, non giudica una spesa, non propone obiettivi che non hai
+scritto tu. Non esistono messaggi del tipo "stai spendendo troppo in ristoranti": l'app mostra
+quanto hai speso in ristoranti, e il giudizio è tuo.
+
+Vale in particolare per la **V2 con gli investimenti**, dove la tentazione è più forte: nessuna
+proiezione di rendimento, nessun confronto con un benchmark presentato come voto, nessun
+suggerimento di allocazione. **Descrive, non prescrive** — e nella schermata del patrimonio ci
+va un disclaimer visibile, non nascosto in un footer.
+
+## Cose da non fare
+
+- Non committare file `.env`, chiavi, backup del database
+- Non modificare la configurazione di build/deploy senza chiedere
+- Non introdurre pattern architetturali nuovi senza discuterli prima
+- Non introdurre servizi a pagamento: l'hosting deve restare interamente gratuito
+- Non mettere logica di dominio nei router o nei componenti React
+- Non inventare uno stile finché non arriva il design system
+- Non usare i `float` per i soldi. Mai.
+
+## Questioni aperte
+
+Chiuse in fase di planning (dettagli in [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md)):
+
+- [x] Stack → identico al progetto sorgente: React/Tailwind + FastAPI + Postgres su Neon,
+      hosting Vercel, magic link via Brevo
+- [x] Utenti → uno solo oggi, ma `household_id` ovunque dal primo giorno
+- [x] Come entrano i movimenti → **solo a mano** in V1; CSV e ricorrenti in V1.5
+- [x] Budget → nessun tetto per categoria, solo l'obiettivo di risparmio mensile
+- [x] Saldi → derivati dai movimenti, con la riconciliazione come movimento
+- [x] Categorie → libere, un livello, elenchi separati per uscite ed entrate
+- [x] Periodo → mese solare di default, intervallo libero nei grafici
+- [x] Carte di credito → nessun addebito differito in V1
+- [x] Mobile → PWA installabile, solo online
+- [x] Grafici → Recharts
+- [x] Serve un LLM? → no in V1, da rivalutare in V1.5 per l'import
+- [x] Investimenti → V2, con il modello già abbozzato nel piano
+
+Ancora aperte, da decidere in corsa:
+
+- [ ] Taratura dell'obiettivo di risparmio, dopo i primi mesi d'uso reale
+- [ ] Serviranno mai conti in valuta diversa dall'euro? V1 è solo EUR, e la crypto della V2 si
+      valorizza in euro senza che il conto cambi valuta
+- [ ] L'elenco dei movimenti va raggruppato per giorno o resta piatto? Si decide a M3,
+      guardando quanti movimenti ci sono davvero in una giornata
