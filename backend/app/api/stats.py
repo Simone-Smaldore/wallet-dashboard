@@ -16,11 +16,12 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DbSession
 
-from app.api.accounts import balance_rows, movement_rows
+from app.api.accounts import account_values, balance_rows, movement_rows
 from app.api.deps import CurrentUserDep, DbDep
 from app.api.transactions import load_by_ids, load_recent
 from app.domain import balances as balances_domain
 from app.domain import stats as domain
+from app.domain.vocabulary import AccountKind
 from app.domain.period import (
     Period,
     month_of,
@@ -34,6 +35,7 @@ from app.schemas.stats import (
     AnalysisOut,
     CategorySliceOut,
     MonthPointOut,
+    NetWorthOut,
     PaceOut,
     CalendarOut,
     PeriodOut,
@@ -74,14 +76,22 @@ def summary(
     summed = domain.totals(movements, period)
 
     household = db.get(Household, user.household_id)
+    valued, valued_on = account_values(db, user.household_id)
+    worth = balances_domain.net_worth_parts(rows, movements, valuations=valued)
 
     return SummaryOut(
         on=day,
         period=PeriodOut(start=period.start, end=period.end),
-        net_worth_cents=balances_domain.net_worth(rows, movements),
-        accounts=[_account_out(account, totals) for account in accounts],
+        net_worth_cents=worth.total_cents,
+        net_worth=NetWorthOut(
+            total_cents=worth.total_cents,
+            liquid_cents=worth.liquid_cents,
+            invested_cents=worth.invested_cents,
+            valued_on=valued_on,
+        ),
+        accounts=[_account_out(account, totals, valued, valued_on) for account in accounts],
         totals=_totals_out(summed),
-        savings=_savings_out(db, household, movements, on=day),
+        savings=_savings_out(db, household, accounts, movements, on=day),
         recent=load_recent(db, user.household_id),
     )
 
@@ -89,6 +99,7 @@ def summary(
 def _savings_out(
     db: DbSession,
     household: Household | None,
+    accounts: list[Account],
     movements: list[balances_domain.MovementRow],
     *,
     on: date,
@@ -103,16 +114,34 @@ def _savings_out(
     target = household.monthly_savings_target_cents if household else None
     category_id = household.salary_category_id if household else None
 
+    invested = frozenset(
+        account.id
+        for account in accounts
+        if account.kind == AccountKind.INVESTIMENTO.value
+    )
+
     this_month = domain.savings_month(
-        movements, on, salary_category_id=category_id, on=on
+        movements,
+        on,
+        salary_category_id=category_id,
+        investment_account_ids=invested,
+        on=on,
     )
     last_month = domain.savings_month(
-        movements, shift_month(month_of(on).start, -1), salary_category_id=category_id, on=on
+        movements,
+        shift_month(month_of(on).start, -1),
+        salary_category_id=category_id,
+        investment_account_ids=invested,
+        on=on,
     )
 
     # Nothing came in and nothing went out: there is no month to judge, which is
     # a different thing from a month that missed its target.
-    judged = last_month if (last_month.budget_cents or last_month.spent_cents) else None
+    judged = (
+        last_month
+        if (last_month.budget_cents or last_month.spent_cents or last_month.set_aside_cents)
+        else None
+    )
 
     category = db.get(Category, category_id) if category_id is not None else None
 
@@ -139,6 +168,7 @@ def _month_out(month: domain.SavingsMonth | None) -> SavingsMonthOut | None:
         budget_cents=month.budget_cents,
         spent_cents=month.spent_cents,
         saved_cents=month.saved_cents,
+        set_aside_cents=month.set_aside_cents,
         is_open=month.is_open,
     )
 
@@ -274,7 +304,13 @@ def _accounts(db: DbSession, household_id: int) -> list[Account]:
     )
 
 
-def _account_out(account: Account, totals: dict[int, int]) -> AccountOut:
+def _account_out(
+    account: Account,
+    totals: dict[int, int],
+    valued: dict[int, int],
+    valued_on: date | None,
+) -> AccountOut:
+    value = valued.get(account.id)
     return AccountOut(
         id=account.id,
         name=account.name,
@@ -285,6 +321,8 @@ def _account_out(account: Account, totals: dict[int, int]) -> AccountOut:
         position=account.position,
         is_archived=account.is_archived,
         balance_cents=totals.get(account.id, account.opening_balance_cents),
+        value_cents=value,
+        valued_on=valued_on if value is not None else None,
     )
 
 

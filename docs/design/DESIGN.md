@@ -263,6 +263,15 @@ mai un grafico a zero. Etichette oneste ("proiezione lineare", non "previsione")
   che devono essere leggibili. Su 390px, nome + tipo + saldo + tre comandi sulla stessa riga
   non lasciano spazio a niente. **Conti e categorie sono card in griglia** (2 colonne da
   `sm`, 3 da `lg`), **i movimenti sono righe**.
+- ⚠️ **I conti hanno un'icona, e quelli di investimento sono l'unica che si
+  colora.** Se lo meritano: tutto in loro si comporta diversamente — versare è un
+  trasferimento, il saldo è capitale e non denaro, e il numero grande viene da un
+  prezzo. Un elenco in cui sembrano un conto corrente invita esattamente alla
+  confusione che il modello esiste per evitare. Prendono `--chart-3`; ⚠️ **non
+  l'accento**, che è dell'azione primaria e del FAB, e **non uno dei quattro
+  colori del denaro**, che significano entrata, uscita, trasferimento e rettifica
+  — un quinto significato li smusserebbe tutti. Contenitore quadrato, come i
+  trasferimenti: il tondo è delle categorie.
 - Nella card di un conto il **saldo ha la taglia `title`**: è quello per cui la card esiste.
   **Rosso se negativo**, perché un conto in rosso va notato senza dover leggere il segno.
 - La riga di un trasferimento non somiglia né a un'entrata né a un'uscita: titolo

@@ -7,7 +7,13 @@ can move a total, every number the app shows is wrong.
 
 from datetime import date, timedelta
 
-from app.domain.balances import AccountRow, MovementRow, balances, net_worth
+from app.domain.balances import (
+    AccountRow,
+    MovementRow,
+    balances,
+    net_worth,
+    net_worth_parts,
+)
 from app.domain.vocabulary import TransactionKind
 
 TODAY = date(2026, 3, 12)
@@ -132,3 +138,60 @@ def test_movements_of_unknown_accounts_are_ignored():
     must not silently land its movements on someone else."""
     totals = balances([CORRENTE], [expense(1_000, 1), expense(9_999, 99)])
     assert totals == {1: 99_000}
+
+
+# --------------------------------------------------------------------------
+# Liquid and invested
+# --------------------------------------------------------------------------
+
+
+def test_paying_into_an_investment_moves_nothing_out_of_the_net_worth():
+    """⚠️ The whole point of making an investment an account.
+
+    As an expense, 400 € into an ETF took 400 € off what you own — which was
+    simply false. As a transfer it moves between two pockets of yours: the
+    liquid side falls, the invested side rises, the total does not move.
+    """
+    etf = AccountRow(id=9, opening_balance_cents=0, is_investment=True)
+    accounts = [*ALL, etf]
+
+    before = net_worth_parts(accounts, [])
+    after = net_worth_parts(accounts, [transfer(40_000, source=1, target=9)])
+
+    assert after.total_cents == before.total_cents
+    assert after.liquid_cents == before.liquid_cents - 40_000
+    assert after.invested_cents == 40_000
+
+
+def test_an_investment_without_a_price_falls_back_to_what_was_paid_in():
+    """An understatement, and the honest one: better than a market value nobody
+    has. The screen says when the number is from, and "never" is an answer."""
+    etf = AccountRow(id=9, opening_balance_cents=0, is_investment=True)
+
+    worth = net_worth_parts([*ALL, etf], [transfer(40_000, source=1, target=9)])
+
+    assert worth.invested_cents == 40_000
+
+
+def test_a_price_replaces_the_capital_paid_in():
+    """12.402 € paid in, worth 13.910 today: the second is the one that counts
+    for what you own, and the first stays visible as the account's balance."""
+    etf = AccountRow(id=9, opening_balance_cents=0, is_investment=True)
+
+    worth = net_worth_parts(
+        [*ALL, etf],
+        [transfer(1_240_200, source=1, target=9)],
+        valuations={9: 1_391_000},
+    )
+
+    assert worth.invested_cents == 1_391_000
+    assert worth.total_cents == worth.liquid_cents + 1_391_000
+
+
+def test_an_account_left_out_of_the_net_worth_is_in_neither_half():
+    shared = AccountRow(id=8, opening_balance_cents=90_000, include_in_net_worth=False)
+
+    worth = net_worth_parts([*ALL, shared], [])
+
+    assert worth.liquid_cents == net_worth_parts(ALL, []).liquid_cents
+    assert worth.invested_cents == 0

@@ -95,6 +95,11 @@ class SavingsMonthOut(BaseModel):
     spent_cents: int
     #: Budget minus spending. Negative means the month cost more than it had.
     saved_cents: int
+    #: ⚠️ Money moved into an investment account this month, net of anything
+    #: taken back out. Not spending — it is still yours — but it has left the
+    #: current account, so the month's budget loses it and the goal measures
+    #: what you keep on top of what you invest.
+    set_aside_cents: int
     #: True for the month being lived: it gets an allowance, not a verdict.
     is_open: bool
 
@@ -142,12 +147,28 @@ class CalendarOut(BaseModel):
     months: list[DateType]
 
 
+class NetWorthOut(BaseModel):
+    """What you have, split into what you could spend and what is invested.
+
+    ⚠️ `valued_on` is the **oldest** valuation behind the invested figure. A
+    total that looks current and is three weeks old is worse than no total: on a
+    missing number you check, on a stale one you rely.
+    """
+
+    total_cents: int
+    liquid_cents: int
+    invested_cents: int
+    #: Null when nothing is invested, or when nothing has ever been priced.
+    valued_on: DateType | None
+
+
 class SummaryOut(BaseModel):
     """Everything the Riepilogo draws, in one round trip."""
 
     on: DateType
     period: PeriodOut
     net_worth_cents: int
+    net_worth: NetWorthOut
     accounts: list[AccountOut]
     totals: TotalsOut
     savings: SavingsOut

@@ -13,17 +13,72 @@ from enum import StrEnum
 
 
 class AccountKind(StrEnum):
-    """Where money sits. All of them are immediate in V1.
+    """Where money sits.
 
     No deferred-debit card: a credit card, if it ever matters, is an account
     that goes negative and that you zero at the end of the month with a normal
     transfer. Representable without adding a concept.
+
+    ⚠️ `INVESTIMENTO` is the one that behaves differently, and it earns the
+    exception. Paying into an ETF is a **transfer**, not a spend: the money is
+    still yours, so the net worth must not move and the spending pie must not
+    show it. But it *has* left the current account and cannot be spent twice, so
+    the month's budget has to lose it — see stats.savings_month.
+
+    ⚠️ Its balance is **capital contributed**, derived from the movements like
+    every other balance. What it is worth today is a different fact and lives in
+    `asset_valuation`. Two true numbers that say different things, shown
+    together — never one number pretending to be both.
     """
 
     CORRENTE = "corrente"
     DEPOSITO = "deposito"
     CONTANTE = "contante"
     PREPAGATA = "prepagata"
+    INVESTIMENTO = "investimento"
+
+
+class AssetKind(StrEnum):
+    """What an investment is made of.
+
+    The kind decides how a price is read, not just how it is labelled: see
+    `PriceBasis`.
+    """
+
+    CRYPTO = "crypto"
+    ETF = "etf"
+    OBBLIGAZIONE = "obbligazione"
+    ALTRO = "altro"
+
+
+class PriceBasis(StrEnum):
+    """How a quoted price turns into money.
+
+    ⚠️ **This exists because a bond is not quoted in euro.** The BTP Mz72 shows
+    `55,78` on Borsa Italiana, and that is not 55,78 € — it is 55,78% of the
+    nominal. An ETF at `126,53` *is* 126,53 € a share.
+
+    Without the distinction a bond enters the net worth a hundred times too
+    large, and it is the kind of error you only catch by looking at the total
+    and finding it implausible.
+    """
+
+    #: value = quantity x price. Shares, coins.
+    PER_UNIT = "per_unit"
+    #: value = nominal x price / 100. Bonds.
+    PERCENT_OF_NOMINAL = "percent_of_nominal"
+
+
+class PriceSource(StrEnum):
+    """Where a valuation came from.
+
+    Kept on every valuation so a number can always be traced back to whoever
+    said it — including "you did".
+    """
+
+    MANUAL = "manual"
+    COINGECKO = "coingecko"
+    BORSA_ITALIANA = "borsa_italiana"
 
 
 class TransactionKind(StrEnum):

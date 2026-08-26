@@ -688,6 +688,75 @@ com'è andato davvero.
 
 Tutto questo vive in `domain/stats.savings_month`, e in nessun altro posto.
 
+## Gli investimenti
+
+Arrivati prima della V2 perché senza di loro tre numeri erano falsi: una rata ETF faceva
+**calare il patrimonio** di soldi ancora tuoi, e metteva nella torta delle uscite una fetta
+che non era consumo.
+
+**Un conto di tipo `investimento`.** Versarci dentro è un **trasferimento**: il patrimonio
+non si muove e le statistiche di spesa non lo vedono.
+
+⚠️ **Il suo saldo è il capitale versato**, ricavato dai movimenti come ogni altro saldo.
+Quanto vale oggi è un fatto diverso e sta in `asset_valuation`. Due numeri veri che dicono
+cose diverse, mostrati insieme — *versato 12.402, vale 12.400, −2* — mai uno che finge di
+essere entrambi.
+
+⚠️ **Ma nel budget del mese l'accantonamento pesa come una spesa.** I soldi dal conto sono
+partiti davvero e non li puoi spendere due volte: `risparmio = budget − speso − accantonato`.
+L'obiettivo misura quello che tieni **oltre** a quello che investi. È la scelta più severa
+delle due, ed è quella presa.
+
+### Gli asset
+
+```
+asset             account_id, name, kind, quantity NUMERIC(28,8),
+                  price_basis, source, source_ref, opened_at, closed_at
+asset_valuation   asset_id, date, unit_price_cents, value_cents, source
+```
+
+⚠️ **`quantity` è l'unico decimale del progetto.** Un bitcoin si conta a otto decimali, un
+ETF a frazioni di quota: gli interi non bastano e la scala non è quella dei soldi.
+`value_cents` invece è un importo e resta intero come tutti gli altri.
+
+⚠️ **`price_basis` esiste perché un'obbligazione non si quota in euro.** Il BTP Mz72 segna
+`55,78` su Borsa Italiana, e non sono 55,78 € — è il 55,78% del nominale. Letto come euro,
+10.000 € di nominale entrerebbero in patrimonio a 557.800 €. Non solleva niente e non si vede
+da vicino: si vede solo guardando il totale con sospetto. Il calcolo sta in
+`domain/assets.py`, in un posto solo.
+
+⚠️ **Le valutazioni sono istantanee datate, mai un campo sovrascritto.** Un "valore attuale"
+aggiornato in place renderebbe la curva del patrimonio una bugia retroattiva.
+
+⚠️ **La data è quella della fonte, non quella dello scaricamento**, e viaggia sempre col
+numero. Un totale che sembra attuale e non lo è è peggio di nessun totale.
+
+### I prezzi, una volta al giorno
+
+`backend/app/prices/`: `coingecko.py` (endpoint pubblico, nessuna chiave) e
+`borsa_italiana.py` (la scheda per ISIN). Girano da `GET /api/cron/prices` — protetta da
+`CRON_SECRET`, un cron al giorno su Vercel — e da `python -m scripts.prices`.
+
+⚠️ **`user-agent` esplicito obbligatorio**, come per Brevo: senza è un 403 silenzioso,
+indistinguibile da "oggi nessun prezzo".
+
+⚠️ **Una fonte che non risponde non scrive niente.** L'ultima valutazione resta con la sua
+data, e la schermata mostra quella data. Uno scraping non ti tradisce rompendosi: ti
+tradisce stando fermo mentre credi che stia aggiornando.
+
+⚠️ **Una pausa fra un titolo e l'altro, e un tentativo di riserva.** Chiedere sei strumenti
+di fila a Borsa Italiana ne fa rifiutare uno — visto costruendo questa cosa, con una
+richiesta che da sola funzionava un secondo dopo. In un job giornaliero un no transitorio
+costa un numero vecchio per ventiquattro ore.
+
+⚠️ **I test non chiamano la rete**: i parser girano su HTML salvato in `tests/fixtures/`.
+
+### Cosa resta fuori
+
+Nessuna proiezione di rendimento, nessun confronto con un benchmark, nessun suggerimento di
+allocazione. **Descrive, non prescrive**, e il disclaimer sta visibile sulla card del
+patrimonio.
+
 ## Vocabolari chiusi
 
 Stanno in `backend/app/domain/vocabulary.py` e sono rispecchiati in
@@ -695,7 +764,10 @@ Stanno in `backend/app/domain/vocabulary.py` e sono rispecchiati in
 aggiungere un valore richiede di decidere cosa fa il resto del codice quando lo incontra.
 
 - **Tipo di movimento**: `expense`, `income`, `transfer`
-- **Tipo di conto**: corrente, deposito, contante, prepagata
+- **Tipo di conto**: corrente, deposito, contante, prepagata, **investimento**
+- **Tipo di asset**: crypto, etf, obbligazione, altro
+- **Base del prezzo**: `per_unit`, `percent_of_nominal`
+- **Fonte del prezzo**: `manual`, `coingecko`, `borsa_italiana`
 - **Tipo di categoria**: `expense`, `income`
 
 ⚠️ **Le categorie invece sono aperte** e le gestisci tu: sono contenuto. Non metterle qui, non

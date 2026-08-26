@@ -5,6 +5,7 @@ metadata from a single import.
 """
 
 from app.models.account import Account
+from app.models.asset import Asset, AssetValuation
 from app.models.auth import LoginToken, Session
 from app.models.base import Base, TimestampMixin
 from app.models.category import Category
@@ -14,6 +15,8 @@ from app.models.user import User
 
 __all__ = [
     "Account",
+    "Asset",
+    "AssetValuation",
     "Base",
     "Category",
     "Household",

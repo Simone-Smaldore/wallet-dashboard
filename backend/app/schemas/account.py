@@ -48,11 +48,28 @@ class AccountOut(BaseModel):
     is_archived: bool
     # Computed, never stored: opening balance plus every movement that touches
     # this account. See domain/balances.py.
+    #
+    # ⚠️ For an investment account this is the **capital paid in**, not what it
+    # is worth: the two are different facts and the screen shows both.
     balance_cents: int
+
+    #: What the holdings inside it are worth, when there are any and a price has
+    #: been found. Null everywhere else — including an investment account whose
+    #: assets have never been priced, where the balance is the honest answer.
+    #:
+    #: ⚠️ Computed **here** and not on each screen. It was worked out inside the
+    #: Conti page first, which meant the Riepilogo could not know it and showed
+    #: the capital instead: two screens, two answers, one of them wrong. A number
+    #: this app shows twice has to be decided once.
+    value_cents: int | None = None
+    #: ⚠️ Travels with `value_cents`, always. A value that looks current and is
+    #: three weeks old is worse than none: on a missing number you check, on a
+    #: stale one you rely.
+    valued_on: date | None = None
 
 
 class AccountList(BaseModel):
-    """The list plus the one number the screen shows above it.
+    """The list plus the numbers the screen shows above it.
 
     Sent together on purpose: the total is a property of the whole set, and
     letting the client add up the balances would be fine arithmetically but
@@ -61,3 +78,8 @@ class AccountList(BaseModel):
 
     accounts: list[AccountOut]
     net_worth_cents: int
+    #: The same split the Riepilogo shows, from the same function: what you
+    #: could spend, and what is invested.
+    liquid_cents: int = 0
+    invested_cents: int = 0
+    valued_on: date | None = None

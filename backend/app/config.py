@@ -42,6 +42,11 @@ class Settings(BaseSettings):
 
     login_token_ttl_minutes: int = 15
     session_ttl_days: int = 30
+
+    #: ⚠️ What the daily price job has to present to be let in. Empty means the
+    #: job is off: an endpoint that writes to the database must not be open
+    #: because a variable was forgotten.
+    cron_secret: str = ""
     login_requests_per_hour: int = 20
 
     @field_validator("allowed_emails", mode="before")

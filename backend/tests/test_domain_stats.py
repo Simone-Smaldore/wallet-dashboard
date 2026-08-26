@@ -468,3 +468,113 @@ def test_a_month_being_lived_is_marked_open():
 
     assert september(movements, on=date(2026, 9, 10)).is_open is True
     assert september(movements, on=date(2026, 10, 3)).is_open is False
+
+
+# --------------------------------------------------------------------------
+# Investments: yours in the net worth, gone from the month's budget
+# --------------------------------------------------------------------------
+
+INVESTED = frozenset({5})
+
+
+def paid_in(amount, *, when, source=1):
+    """A transfer into an investment account: money put away."""
+    return MovementRow(
+        kind=TransactionKind.TRANSFER,
+        amount_cents=amount,
+        account_id=source,
+        counter_account_id=5,
+        date=when,
+    )
+
+
+def with_investments(movements, on=date(2026, 9, 30)):
+    return stats.savings_month(
+        movements,
+        date(2026, 9, 15),
+        salary_category_id=SALARY,
+        investment_account_ids=INVESTED,
+        on=on,
+    )
+
+
+def test_paying_into_an_investment_is_neither_income_nor_spending():
+    """⚠️ The untouchable rule, at the point that tests it hardest.
+
+    Buying an ETF is not consumption, so it must not appear in the spending;
+    and it is not earning, so it must not appear in the income. It is money
+    that changed shape.
+    """
+    movements = [salary(200_000, when=date(2026, 8, 27)), paid_in(40_000, when=date(2026, 9, 2))]
+
+    month = with_investments(movements)
+
+    assert month.spent_cents == 0
+    assert month.other_income_cents == 0
+    assert month.set_aside_cents == 40_000
+    # And nowhere in the spending statistics either.
+    assert stats.by_category(movements, month_of(date(2026, 9, 1))) == []
+
+
+def test_what_is_put_away_comes_off_the_month_s_budget():
+    """⚠️ Saving, yes — but the money has left the current account, and a goal
+    that ignored it would tell you that you can spend it again."""
+    movements = [
+        salary(200_000, when=date(2026, 8, 27)),
+        paid_in(40_000, when=date(2026, 9, 2)),
+        expense(30_000, when=date(2026, 9, 3)),
+    ]
+
+    month = with_investments(movements)
+
+    assert month.budget_cents == 200_000
+    assert month.saved_cents == 200_000 - 30_000 - 40_000
+    assert month.allowance_cents(20_000) == 110_000
+
+
+def test_taking_money_back_out_of_an_investment_gives_it_back_to_the_month():
+    movements = [
+        salary(200_000, when=date(2026, 8, 27)),
+        MovementRow(
+            kind=TransactionKind.TRANSFER,
+            amount_cents=50_000,
+            account_id=5,
+            counter_account_id=1,
+            date=date(2026, 9, 4),
+        ),
+    ]
+
+    month = with_investments(movements)
+
+    assert month.set_aside_cents == -50_000
+    assert month.saved_cents == 250_000
+
+
+def test_moving_between_two_investment_accounts_puts_nothing_away():
+    """Rebalancing is not saving: the money was already set aside."""
+    movements = [
+        salary(200_000, when=date(2026, 8, 27)),
+        MovementRow(
+            kind=TransactionKind.TRANSFER,
+            amount_cents=30_000,
+            account_id=5,
+            counter_account_id=6,
+            date=date(2026, 9, 5),
+        ),
+    ]
+
+    month = stats.savings_month(
+        movements,
+        date(2026, 9, 15),
+        salary_category_id=SALARY,
+        investment_account_ids=frozenset({5, 6}),
+        on=date(2026, 9, 30),
+    )
+
+    assert month.set_aside_cents == 0
+
+
+def test_a_transfer_between_two_ordinary_accounts_is_still_nothing():
+    movements = [salary(200_000, when=date(2026, 8, 27)), transfer(70_000, when=date(2026, 9, 6))]
+
+    assert with_investments(movements).set_aside_cents == 0

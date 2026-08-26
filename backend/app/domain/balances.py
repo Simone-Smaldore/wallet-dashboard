@@ -25,6 +25,12 @@ class AccountRow:
     id: int
     opening_balance_cents: int
     include_in_net_worth: bool = True
+    #: ⚠️ An investment account's balance is the **capital paid into it**, and
+    #: that is not what it is worth today. The market value lives in
+    #: `asset_valuation`; this flag is how the split between liquid and invested
+    #: is drawn, and how `stats` knows a transfer here is money set aside rather
+    #: than money moved between pockets.
+    is_investment: bool = False
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,54 @@ def balances(
             totals[movement.counter_account_id] += movement.amount_cents
 
     return totals
+
+
+@dataclass(frozen=True)
+class NetWorth:
+    """What you have, and how much of it you could spend tomorrow.
+
+    ⚠️ Liquid and invested are separated because they answer different
+    questions and get confused constantly. A BTP maturing in 2072 is yours; it
+    is not money you can use this week.
+    """
+
+    total_cents: int
+    liquid_cents: int
+    invested_cents: int
+
+
+def net_worth_parts(
+    accounts: Iterable[AccountRow],
+    movements: Iterable[MovementRow],
+    *,
+    valuations: dict[int, int] | None = None,
+    as_of: Date | None = None,
+) -> NetWorth:
+    """The total, split into what is spendable and what is invested.
+
+    `valuations` is account id -> what the assets in it are worth today, from
+    the price feed. ⚠️ An investment account **without** a valuation falls back
+    to its balance, which is the capital paid in: an understatement, and the
+    honest one — better than a market value we do not have.
+
+    The rest is `balances()` as always: one formula, one place.
+    """
+    counted = [account for account in accounts if account.include_in_net_worth]
+    totals = balances(counted, movements, as_of=as_of)
+    priced = valuations or {}
+
+    liquid = 0
+    invested = 0
+    for account in counted:
+        balance = totals.get(account.id, account.opening_balance_cents)
+        if account.is_investment:
+            invested += priced.get(account.id, balance)
+        else:
+            liquid += balance
+
+    return NetWorth(
+        total_cents=liquid + invested, liquid_cents=liquid, invested_cents=invested
+    )
 
 
 def net_worth(

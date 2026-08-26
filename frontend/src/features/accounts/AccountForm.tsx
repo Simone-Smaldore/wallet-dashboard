@@ -12,7 +12,16 @@ export const KIND_LABELS: Record<AccountKind, string> = {
   deposito: 'Conto deposito',
   contante: 'Contante',
   prepagata: 'Prepagata',
+  investimento: 'Investimento',
 }
+
+/** ⚠️ Said where the choice is made, not in a manual nobody opens.
+ *
+ * An investment account behaves differently in three ways at once, and the one
+ * that surprises people is the third: its balance is what you paid in, not what
+ * it is worth. The value comes from the holdings inside it. */
+const INVESTMENT_NOTE =
+  'I versamenti ci arrivano come trasferimenti: il patrimonio non cala e le uscite non lo vedono, ma il budget del mese sì. Il saldo è quanto hai versato — quanto vale oggi lo dicono gli asset che ci metti dentro.'
 
 export function AccountForm({
   account,
@@ -106,6 +115,9 @@ export function AccountForm({
               </button>
             ))}
           </div>
+          {kind === 'investimento' ? (
+            <p className="text-caption text-ink-3">{INVESTMENT_NOTE}</p>
+          ) : null}
         </div>
 
         <Field

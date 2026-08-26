@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session as DbSession
 
 from app.api.deps import CurrentUserDep, DbDep
 from app.domain import balances as domain
-from app.domain.vocabulary import TransactionKind
-from app.models import Account, Transaction, User
+from app.domain.vocabulary import AccountKind, TransactionKind
+from app.models import Account, Asset, Transaction, User
 from app.schemas.account import AccountCreate, AccountList, AccountOut, AccountUpdate
 from app.schemas.transaction import ReconcileRequest, ReconcileResult
 
@@ -38,25 +38,53 @@ def list_accounts(user: CurrentUserDep, db: DbDep) -> AccountList:
     movements = movement_rows(db, user.household_id)
 
     totals = domain.balances(rows, movements)
-    net_worth = domain.net_worth(rows, movements)
+    valued, oldest = account_values(db, user.household_id)
+    worth = domain.net_worth_parts(rows, movements, valuations=valued)
 
     return AccountList(
         accounts=[
-            AccountOut(
-                id=account.id,
-                name=account.name,
-                kind=account.kind,
-                opening_balance_cents=account.opening_balance_cents,
-                opening_date=account.opening_date,
-                include_in_net_worth=account.include_in_net_worth,
-                position=account.position,
-                is_archived=account.is_archived,
-                balance_cents=totals.get(account.id, account.opening_balance_cents),
+            _to_schema(
+                account,
+                totals.get(account.id, account.opening_balance_cents),
+                valued.get(account.id),
+                oldest,
             )
             for account in accounts
         ],
-        net_worth_cents=net_worth,
+        net_worth_cents=worth.total_cents,
+        liquid_cents=worth.liquid_cents,
+        invested_cents=worth.invested_cents,
+        valued_on=oldest,
     )
+
+
+def account_values(db: DbSession, household_id: int) -> tuple[dict[int, int], date | None]:
+    """What each investment account's holdings are worth, and how fresh that is.
+
+    ⚠️ The single place this is worked out. Every screen that shows the value of
+    an investment reads it from here, so none of them can disagree with another
+    — which is exactly what happened when the Conti page computed it for itself.
+    """
+    from app.api.assets import latest_valuations
+
+    newest = latest_valuations(db, household_id)
+    assets = db.scalars(
+        select(Asset).where(Asset.household_id == household_id, Asset.closed_at.is_(None))
+    ).all()
+
+    per_account: dict[int, int] = {}
+    dates: list[date] = []
+    for asset in assets:
+        valuation = newest.get(asset.id)
+        if valuation is None:
+            continue
+        per_account[asset.account_id] = (
+            per_account.get(asset.account_id, 0) + valuation.value_cents
+        )
+        dates.append(valuation.date)
+
+    # The oldest of them: a total is only as fresh as its stalest part.
+    return per_account, min(dates) if dates else None
 
 
 @router.post("", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
@@ -220,6 +248,7 @@ def balance_rows(accounts: list[Account]) -> list[domain.AccountRow]:
             id=account.id,
             opening_balance_cents=account.opening_balance_cents,
             include_in_net_worth=account.include_in_net_worth,
+            is_investment=account.kind == AccountKind.INVESTIMENTO.value,
         )
         for account in accounts
     ]
@@ -261,7 +290,12 @@ def movement_rows(db: DbSession, household_id: int) -> list[domain.MovementRow]:
     ]
 
 
-def _to_schema(account: Account, balance_cents: int) -> AccountOut:
+def _to_schema(
+    account: Account,
+    balance_cents: int,
+    value_cents: int | None = None,
+    valued_on: date | None = None,
+) -> AccountOut:
     return AccountOut(
         id=account.id,
         name=account.name,
@@ -272,4 +306,6 @@ def _to_schema(account: Account, balance_cents: int) -> AccountOut:
         position=account.position,
         is_archived=account.is_archived,
         balance_cents=balance_cents,
+        value_cents=value_cents,
+        valued_on=valued_on if value_cents is not None else None,
     )

@@ -6,11 +6,12 @@ import { useQuery } from '../../api/cache'
 import { api, type Account, type Summary } from '../../api/client'
 import { Amount } from '../../components/Amount'
 import { Button } from '../../components/Button'
+import { AccountIcon } from '../../components/AccountIcon'
 import { Card } from '../../components/Card'
 import { EmptyState } from '../../components/EmptyState'
 import { IconButton } from '../../components/IconButton'
 import { formatMoney, formatSigned } from '../../lib/money'
-import { formatMonth } from '../../lib/period'
+import { formatDayShort, formatMonth } from '../../lib/period'
 import { TransactionRow } from '../transactions/TransactionRow'
 import { TransactionSheet } from '../transactions/TransactionSheet'
 import { SavingsTargetSheet } from './SavingsTargetSheet'
@@ -50,11 +51,7 @@ export function RiepilogoPage() {
     <div className="flex flex-col gap-3">
       <h1 className="font-display text-title text-ink-1">Riepilogo</h1>
 
-      <Card>
-        <p className="text-micro uppercase text-ink-3">Patrimonio</p>
-        <p className="num mt-1 text-hero text-ink-1">{formatMoney(data.net_worth_cents)}</p>
-        <p className="mt-1 text-caption text-ink-2">{formatMonth(data.period.start)}</p>
-      </Card>
+      <Patrimonio worth={data.net_worth} />
 
       {nothingYet ? (
         <EmptyState title="Non c'è ancora niente da riassumere">
@@ -112,6 +109,48 @@ function Skeleton() {
         </div>
       </Card>
     </div>
+  )
+}
+
+/** What you have, and how much of it you could actually spend.
+ *
+ * ⚠️ **Liquid and invested are separated because they get confused.** A BTP
+ * maturing in 2072 is yours; it is not money for this week. One number for both
+ * answers neither question well.
+ *
+ * ⚠️ **The invested figure carries the day it was true.** Prices are fetched
+ * once a day and a market can be shut: a total that looks current and is three
+ * weeks old is worse than no total — on a missing number you check, on a stale
+ * one you rely.
+ */
+function Patrimonio({ worth }: { worth: Summary['net_worth'] }) {
+  return (
+    <Card>
+      <p className="text-micro uppercase text-ink-3">Patrimonio</p>
+      <p className="num mt-1 text-hero text-ink-1">{formatMoney(worth.total_cents)}</p>
+
+      {worth.invested_cents === 0 ? null : (
+        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1">
+          <div className="flex items-baseline gap-2">
+            <dt className="text-caption text-ink-2">Liquido</dt>
+            <dd className="num text-body text-ink-1">{formatMoney(worth.liquid_cents)}</dd>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <dt className="text-caption text-ink-2">Investito</dt>
+            <dd className="num text-body text-ink-1">{formatMoney(worth.invested_cents)}</dd>
+          </div>
+        </dl>
+      )}
+
+      <p className="mt-2 text-caption text-ink-3">
+        {worth.valued_on
+          ? `Investimenti valutati al ${formatDayShort(worth.valued_on)}.`
+          : null}{' '}
+        {/* ⚠️ Visible, not tucked into a footer. The app describes what happened
+            to your money; it does not tell you what to do with it. */}
+        Wallet descrive, non consiglia.
+      </p>
+    </Card>
   )
 }
 
@@ -262,7 +301,9 @@ function Allowance({
   target: number
   allowance: number
 }) {
-  const spendable = month.budget_cents - target
+  // What was there to spend: the budget, minus the target you have to keep,
+  // minus whatever has already gone into an investment.
+  const spendable = month.budget_cents - target - Math.max(month.set_aside_cents, 0)
   const used = spendable > 0 ? Math.min(100, (month.spent_cents / spendable) * 100) : 100
   const over = allowance < 0
 
@@ -291,6 +332,17 @@ function Allowance({
           </>
         ) : null}
       </p>
+
+      {/* ⚠️ Said out loud, because it is the line that explains an otherwise
+          baffling number. A month with a 10.000 € bond purchase looks like a
+          disaster until it says that the money was put away, not spent. */}
+      {month.set_aside_cents !== 0 ? (
+        <p className="mt-1 text-caption text-ink-3">
+          di cui <span className="num">{formatMoney(Math.abs(month.set_aside_cents))}</span>{' '}
+          {month.set_aside_cents > 0 ? 'messi da parte' : 'ripresi dagli investimenti'} —
+          fuori dal budget, dentro al patrimonio
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -323,16 +375,24 @@ function Accounts({ accounts }: { accounts: Account[] }) {
                 leads to its movements rather than to its settings. */}
             <Link
               to={`/movimenti?account_id=${account.id}`}
-              className="flex flex-col gap-1 rounded-card border border-border-soft bg-surface-card p-4 shadow-card transition-colors duration-200 hover:bg-surface-hover"
+              className="flex items-center gap-3 rounded-card border border-border-soft bg-surface-card p-4 shadow-card transition-colors duration-200 hover:bg-surface-hover"
             >
-              <p className="truncate text-caption text-ink-2">{account.name}</p>
-              <p
-                className={`num text-heading ${
-                  account.balance_cents < 0 ? 'text-money-expense' : 'text-ink-1'
-                }`}
-              >
-                {formatMoney(account.balance_cents)}
-              </p>
+              <AccountIcon kind={account.kind} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-caption text-ink-2">{account.name}</p>
+                {/* ⚠️ For an investment, what it is worth — not what was paid
+                    in. Same field the Conti screen reads, so the two cannot
+                    disagree. */}
+                <p
+                  className={`num text-heading ${
+                    (account.value_cents ?? account.balance_cents) < 0
+                      ? 'text-money-expense'
+                      : 'text-ink-1'
+                  }`}
+                >
+                  {formatMoney(account.value_cents ?? account.balance_cents)}
+                </p>
+              </div>
             </Link>
           </li>
         ))}

@@ -48,7 +48,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.db import get_session_factory
-from app.domain.vocabulary import CategoryKind, TransactionKind
+from app.domain.vocabulary import AccountKind, CategoryKind, TransactionKind
 from app.models import Account, Category, Transaction
 from scripts._common import Abort, DryRun, confirm, header, plural, run, single_household
 from scripts._xlsx import Workbook
@@ -70,6 +70,25 @@ ACCOUNTS = {
     "investimenti": "Conto BDM",
 }
 
+#: ⚠️ **Where an investment payment lands.** The sheet had a single
+#: "Investimenti" pot; the app keeps one account per instrument, so the
+#: destination is read from the description. Anything that matches nothing stays
+#: an expense, which is what it was before — a wrong guess here would move money
+#: into an account it never entered.
+INSTRUMENTS = (
+    ("scalable", "Scalable Capital"),
+    ("etf", "Scalable Capital"),
+    ("btp", "BTP"),
+)
+
+#: ⚠️ Recrowd is deliberately **not** here. It is closed — 1.000 € out, 1.752 €
+#: back — and giving it an account now would be archaeology: the gain would have
+#: to be invented as a date it never had.
+#:
+#: Nor is the BTC withdrawal of December 2024: it is money arriving from outside
+#: everything these sheets ever tracked, so it stays what the sheet called it,
+#: an income.
+
 #: What each account held on 1 January 2024, from "Cifre Iniziali 2024".
 OPENING = {
     "Conto BDM": 5_660_066,
@@ -79,6 +98,10 @@ OPENING = {
     "Conto intesa": 0,
     "Satispay": 0,
     "Contanti": 0,
+    # The instruments start empty: everything in them arrives as a transfer.
+    "Scalable Capital": 0,
+    "BTP": 0,
+    "Crypto": 0,
 }
 OPENING_DATE = date(2024, 1, 1)
 
@@ -93,6 +116,13 @@ TODAY_IS = {
     "Satispay": 20_000,
     "Contanti": 17_000,
 }
+
+#: ⚠️ The instruments are **not** in TODAY_IS, and that is the point. Their
+#: balance is the capital paid in, which the transfers produce exactly; what they
+#: are worth today is a different fact, and it comes from the price feed. Forcing
+#: them to a number with a rectification would be inventing the very thing the
+#: asset model exists to measure.
+INVESTMENT_ACCOUNTS = ("Scalable Capital", "BTP", "Crypto")
 
 #: Where an income lands, per year, and which account each following column
 #: transfers to. `None` is the investment pot: money that stays where it is
@@ -264,8 +294,29 @@ def main() -> None:
                 select(Account).where(Account.household_id == household.id)
             )
         }
+        # The instruments are created here rather than by hand: they are part of
+        # what this import *means*, and a run that half-worked because one was
+        # spelled differently is worse than one that made them.
+        for name in INVESTMENT_ACCOUNTS:
+            if name in accounts:
+                continue
+            plan.note(f"creo il conto investimento «{name}»")
+            if args.apply:
+                created = Account(
+                    household_id=household.id,
+                    name=name,
+                    kind=AccountKind.INVESTIMENTO.value,
+                    opening_balance_cents=0,
+                    opening_date=OPENING_DATE,
+                    include_in_net_worth=True,
+                    position=90,
+                )
+                db.add(created)
+                db.flush()
+                accounts[name] = created
+
         missing = [name for name in OPENING if name not in accounts]
-        if missing:
+        if missing and args.apply:
             raise Abort("Conti mancanti nell'app: " + ", ".join(missing))
 
         categories = {
@@ -430,12 +481,32 @@ def _read(books: dict[int, Workbook], plan: DryRun) -> list[dict]:
                 })
                 continue
 
+            category = spending_category(sheet_category, description)
+
+            # ⚠️ Buying an ETF is not spending: the money is still yours, it has
+            # only changed shape. As an expense it took itself out of the net
+            # worth, which was simply false — and it put a slice in the spending
+            # pie that was never consumption.
+            if category == "Investimenti":
+                instrument = _instrument(description)
+                if instrument is not None:
+                    movements.append({
+                        "kind": TransactionKind.TRANSFER,
+                        "date": row[2],
+                        "amount": amount,
+                        "account": account,
+                        "counter": instrument,
+                        "category": None,
+                        "description": description,
+                    })
+                    continue
+
             movements.append({
                 "kind": TransactionKind.EXPENSE,
                 "date": row[2],
                 "amount": amount,
                 "account": account,
-                "category": spending_category(sheet_category, description),
+                "category": category,
                 "description": description,
             })
 
@@ -501,6 +572,15 @@ def _read(books: dict[int, Workbook], plan: DryRun) -> list[dict]:
     return movements
 
 
+def _instrument(description: str) -> str | None:
+    """Which investment account a payment went into, by its description."""
+    text = description.lower()
+    for needle, account in INSTRUMENTS:
+        if needle in text:
+            return account
+    return None
+
+
 def _month_of(description: str) -> int | None:
     text = description.lower()
     for index, name in enumerate(MONTHS, start=1):
@@ -538,6 +618,17 @@ def _gaps(rows: list[dict]) -> dict[str, int]:
     }
 
 
+def _paid_in(rows: list[dict]) -> dict[str, int]:
+    """What ended up in each investment account, for the report."""
+    totals = {name: 0 for name in INVESTMENT_ACCOUNTS}
+    for row in rows:
+        if row["kind"] is TransactionKind.TRANSFER and row.get("counter") in totals:
+            totals[row["counter"]] += row["amount"]
+        if row["kind"] is TransactionKind.TRANSFER and row["account"] in totals:
+            totals[row["account"]] -= row["amount"]
+    return totals
+
+
 def _report(rows: list[dict]) -> None:
     """What the mapping decided, so it can be argued with before it is written."""
     from collections import Counter
@@ -559,6 +650,11 @@ def _report(rows: list[dict]) -> None:
             if row["kind"] is TransactionKind.EXPENSE and row["category"] == name
         )
         print(f"    {name:16} {count:>4} movimenti  {total / 100:>12,.2f}")
+    invested = _paid_in(rows)
+    if any(invested.values()):
+        print("  VERSATO NEGLI INVESTIMENTI")
+        for name, total in invested.items():
+            print(f"    {name:20} {total / 100:>12,.2f}")
     print("  ENTRATE per categoria")
     for name, count in income.most_common():
         print(f"    {name:16} {count:>4}")

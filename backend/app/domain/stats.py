@@ -164,6 +164,11 @@ class SavingsMonth:
     #: Everything else that came in *during* this month.
     other_income_cents: int
     spent_cents: int
+    #: ⚠️ Money moved into an investment account this month, net of anything
+    #: taken back out. It is not spending — it is still yours — but it has left
+    #: the current account and cannot be spent twice, so the month's budget has
+    #: to lose it. See the note on `saved_cents`.
+    set_aside_cents: int
     #: True for the month being lived: it gets an allowance, not a verdict.
     is_open: bool
 
@@ -174,8 +179,19 @@ class SavingsMonth:
 
     @property
     def saved_cents(self) -> int:
-        """What is left over. Negative means the month cost more than it had."""
-        return self.budget_cents - self.spent_cents
+        """What is left over. Negative means the month cost more than it had.
+
+        ⚠️ **What you put away counts against the month like spending does.**
+        Paying 400 € into an ETF is saving, not consumption — but the money has
+        gone, and a goal that ignored it would tell you that you can still spend
+        it. So the target measures what you keep **on top of** what you invest,
+        which is the stricter reading and the one you asked for.
+
+        The money itself is not lost: it moved to an investment account and the
+        net worth does not budge. The two statements live together because they
+        are about different things.
+        """
+        return self.budget_cents - self.spent_cents - self.set_aside_cents
 
     def allowance_cents(self, target_cents: int) -> int:
         """What can still be spent this month and still hit the target."""
@@ -187,6 +203,7 @@ def savings_month(
     month: Date,
     *,
     salary_category_id: int | None,
+    investment_account_ids: frozenset[int] = frozenset(),
     on: Date,
 ) -> SavingsMonth:
     """How one month is doing against the goal.
@@ -208,8 +225,19 @@ def savings_month(
     salary = 0
     other = 0
     spent = 0
+    set_aside = 0
 
     for movement in movements:
+        if this.contains(movement.date) and movement.kind is TransactionKind.TRANSFER:
+            # ⚠️ Into an investment account is money put away; out of one is
+            # money taken back. Between two of them, or between two ordinary
+            # accounts, is nothing at all — which the two ifs say by cancelling.
+            if movement.counter_account_id in investment_account_ids:
+                set_aside += movement.amount_cents
+            if movement.account_id in investment_account_ids:
+                set_aside -= movement.amount_cents
+            continue
+
         if is_spend(movement) and this.contains(movement.date):
             spent += movement.amount_cents
             continue
@@ -232,6 +260,7 @@ def savings_month(
         salary_cents=salary,
         other_income_cents=other,
         spent_cents=spent,
+        set_aside_cents=set_aside,
         is_open=this.contains(on),
     )
 

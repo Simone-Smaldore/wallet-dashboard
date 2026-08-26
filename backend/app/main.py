@@ -2,7 +2,9 @@ from fastapi import FastAPI
 
 from app.api.accounts import router as accounts_router
 from app.api.auth import router as auth_router
+from app.api.assets import router as assets_router
 from app.api.categories import router as categories_router
+from app.api.cron import router as cron_router
 from app.api.household import router as household_router
 from app.api.stats import router as stats_router
 from app.api.transactions import router as transactions_router
@@ -26,3 +28,5 @@ app.include_router(categories_router)
 app.include_router(transactions_router)
 app.include_router(household_router)
 app.include_router(stats_router)
+app.include_router(assets_router)
+app.include_router(cron_router)

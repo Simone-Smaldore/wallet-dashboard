@@ -16,8 +16,33 @@ import { invalidate } from './cache'
 
 /* ---- Closed vocabularies, mirrored from domain/vocabulary.py ---- */
 
-export const ACCOUNT_KINDS = ['corrente', 'deposito', 'contante', 'prepagata'] as const
+export const ACCOUNT_KINDS = [
+  'corrente',
+  'deposito',
+  'contante',
+  'prepagata',
+  /** ⚠️ The one that behaves differently: paying into it is a transfer, so the
+   *  net worth does not move and the spending pie shows nothing — but the
+   *  month's budget loses the money, because it has left the current account.
+   *  Its balance is capital paid in; what it is worth lives in its assets. */
+  'investimento',
+] as const
 export type AccountKind = (typeof ACCOUNT_KINDS)[number]
+
+export const ASSET_KINDS = ['crypto', 'etf', 'obbligazione', 'altro'] as const
+export type AssetKind = (typeof ASSET_KINDS)[number]
+
+/** ⚠️ How a quoted price becomes money.
+ *
+ * An ETF at 126,53 *is* 126,53 € a share. A BTP at 55,78 is **not** 55,78 € —
+ * it is 55,78% of the nominal. Read the wrong way a bond enters the net worth a
+ * hundred times too large, and nothing errors: you would only notice by finding
+ * the total implausible. */
+export const PRICE_BASES = ['per_unit', 'percent_of_nominal'] as const
+export type PriceBasis = (typeof PRICE_BASES)[number]
+
+export const PRICE_SOURCES = ['manual', 'coingecko', 'borsa_italiana'] as const
+export type PriceSource = (typeof PRICE_SOURCES)[number]
 
 export const CATEGORY_KINDS = ['expense', 'income'] as const
 export type CategoryKind = (typeof CATEGORY_KINDS)[number]
@@ -74,13 +99,62 @@ export type Account = {
   include_in_net_worth: boolean
   position: number
   is_archived: boolean
-  /** Computed server-side: opening balance plus every movement. Never stored. */
+  /** Computed server-side: opening balance plus every movement. Never stored.
+   *
+   * ⚠️ For an investment account this is the **capital paid in**, not what it
+   * is worth: two different facts, and the screen shows both. */
   balance_cents: number
+
+  /** What the holdings inside it are worth. Null unless there are priced
+   *  assets — and then `valued_on` says when that was true.
+   *
+   * ⚠️ Decided by the server, deliberately. It used to be worked out inside the
+   * Conti page, which meant the Riepilogo could not know it and showed the
+   * capital instead: two screens, two answers. */
+  value_cents: number | null
+  valued_on: string | null
+}
+
+/** A holding: a quantity that rarely changes and a price that does.
+ *
+ * ⚠️ `valued_on` travels with `value_cents`, always. A number that looks
+ * current and is three weeks old is worse than no number: on a missing one you
+ * ask, on a stale one you rely. */
+export type Asset = {
+  id: number
+  account_id: number
+  name: string
+  kind: AssetKind
+  /** A string, not a number: eight decimals of a coin do not survive float64
+   *  the way integer cents do, so it stays exactly what the server said. */
+  quantity: string
+  price_basis: PriceBasis
+  source: PriceSource
+  source_ref: string | null
+  opened_at: string | null
+  closed_at: string | null
+  notes: string | null
+
+  /** Null when no price has ever been recorded — a fact, not a zero. */
+  value_cents: number | null
+  unit_price_cents: number | null
+  valued_on: string | null
+}
+
+export type NetWorth = {
+  total_cents: number
+  liquid_cents: number
+  invested_cents: number
+  /** The **oldest** valuation behind the invested figure. */
+  valued_on: string | null
 }
 
 export type AccountList = {
   accounts: Account[]
   net_worth_cents: number
+  liquid_cents: number
+  invested_cents: number
+  valued_on: string | null
 }
 
 export type Category = {
@@ -162,6 +236,10 @@ export type SavingsMonth = {
   budget_cents: number
   spent_cents: number
   saved_cents: number
+  /** ⚠️ Moved into an investment account this month, net of what came back.
+   *  Not spending — it is still yours — but it has left the current account, so
+   *  the budget loses it and the goal measures what you keep on top of it. */
+  set_aside_cents: number
   is_open: boolean
 }
 
@@ -229,6 +307,7 @@ export type Summary = {
   on: string
   period: Period
   net_worth_cents: number
+  net_worth: NetWorth
   accounts: Account[]
   totals: Totals
   savings: Savings
@@ -485,6 +564,93 @@ export const api = {
    * years of history. `months: 0` means everything there is. */
   series: (range: { months: number; end?: string }) =>
     request<{ months: MonthPoint[] }>(`/api/stats/series${toQuery(range)}`),
+
+  /* ---- Investments ---- */
+
+  assets: () => request<Asset[]>('/api/assets'),
+
+  createAsset: (body: {
+    account_id: number
+    name: string
+    kind: AssetKind
+    quantity: string
+    price_basis: PriceBasis
+    source: PriceSource
+    source_ref?: string | null
+    opened_at?: string | null
+    notes?: string | null
+  }) => mutate<Asset>('/api/assets', 'POST', body, '/api/assets', '/api/stats'),
+
+  updateAsset: (
+    id: number,
+    body: Partial<{
+      account_id: number
+      name: string
+      kind: AssetKind
+      quantity: string
+      price_basis: PriceBasis
+      source: PriceSource
+      source_ref: string | null
+      closed_at: string | null
+      notes: string | null
+    }>,
+  ) => mutate<Asset>(`/api/assets/${id}`, 'PATCH', body, '/api/assets', '/api/stats'),
+
+  /** ⚠️ Ho comprato: quantità e denaro in **una** richiesta.
+   *
+   * Due scritture che non possono accadere a metà — i soldi usciti senza le
+   * quote entrate farebbero del guadagno una finzione, e nessuno dei due numeri
+   * sembrerebbe sbagliato. */
+  buyAsset: (
+    id: number,
+    body: {
+      quantity: string
+      amount_cents: number
+      from_account_id: number
+      date: string
+      description?: string | null
+    },
+  ) =>
+    mutate<Asset>(
+      `/api/assets/${id}/buy`,
+      'POST',
+      body,
+      '/api/assets',
+      '/api/accounts',
+      '/api/transactions',
+      '/api/stats',
+    ),
+
+  deleteAsset: (id: number) =>
+    mutate<void>(`/api/assets/${id}`, 'DELETE', undefined, '/api/assets', '/api/stats'),
+
+  /** ⚠️ Ask a source for a price without saving anything.
+   *
+   * The reason the asset form has a "prova adesso": a mistyped ISIN is
+   * otherwise invisible — nothing errors, the nightly job simply finds nothing,
+   * and you notice three weeks later because a number never moved. */
+  probePrice: (body: {
+    source: PriceSource
+    source_ref: string
+    kind?: AssetKind
+    price_basis?: PriceBasis
+    quantity?: string
+  }) =>
+    request<{
+      found: boolean
+      unit_price_cents: number | null
+      date: string | null
+      value_cents: number | null
+    }>('/api/assets/probe', { method: 'POST', body }),
+
+  refreshPrices: () =>
+    mutate<{ lines: string[] }>(
+      '/api/assets/refresh',
+      'POST',
+      undefined,
+      '/api/assets',
+      '/api/stats',
+    ),
 
   /* ---- Household: the settings that belong to the money ---- */
 

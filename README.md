@@ -291,6 +291,27 @@ quello che ti suggerisce i candidati.
 ⚠️ **Le due categorie devono avere lo stesso segno.** Fondere una categoria di entrata in una
 di uscita non è una fusione, è una perdita di dati: lo script si rifiuta.
 
+#### `prices` — i prezzi degli investimenti
+
+```bash
+python -m scripts.prices            # chiede i prezzi e dice cosa farebbe
+python -m scripts.prices --apply    # scrive le valutazioni
+```
+
+Lo stesso codice che gira nel cron giornaliero, così quello che vedi qui è quello che
+succede di notte. ⚠️ **Una fonte che non risponde non scrive niente**: la valutazione
+precedente resta con la sua data, e la riga te lo dice.
+
+#### `import_finanza` — lo storico dai fogli Excel
+
+```bash
+python -m scripts.import_finanza ../dati_finanza
+python -m scripts.import_finanza ../dati_finanza --apply
+```
+
+⚠️ **Sostituisce**: cancella tutti i movimenti e riscrive i saldi di apertura. Lancia
+`backup` prima. Le regole di lettura dei fogli stanno nel docstring dello script.
+
 #### `seed_demo` — dati di prova
 
 ```bash
