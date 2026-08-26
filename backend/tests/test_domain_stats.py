@@ -329,7 +329,7 @@ def test_a_free_range_is_a_period_like_any_other():
 
 
 # --------------------------------------------------------------------------
-# Salary cycles: the period a savings goal is actually judged on
+# The savings goal: a calendar month funded by the month before
 # --------------------------------------------------------------------------
 
 SALARY = 42
@@ -339,125 +339,132 @@ def salary(amount, *, when):
     return income(amount, when=when, category=SALARY)
 
 
-def cycles(movements, on):
-    return stats.salary_cycles(movements, salary_category_id=SALARY, on=on)
+def september(movements, on=date(2026, 9, 30)):
+    return stats.savings_month(
+        movements, date(2026, 9, 15), salary_category_id=SALARY, on=on
+    )
 
 
-def test_a_cycle_runs_from_one_salary_to_the_next():
-    """⚠️ Not from the first of the month to the last.
+def test_the_salary_of_the_month_before_is_what_this_month_lives_on():
+    """⚠️ The shift is the whole rule.
 
-    Money arrives on the 27th, and the question a savings goal answers is
-    whether November's salary was still partly there when December's landed.
-    A calendar month cuts that stretch in half and answers something else.
+    Pay lands on the 27th. September is lived on August's salary, and the one
+    arriving on 27 September belongs to October — otherwise the month looks
+    broke for twenty-six days and rich on the twenty-seventh, and a verdict on
+    it says nothing about how the month went.
     """
     movements = [
-        salary(200_000, when=date(2026, 1, 27)),
-        expense(50_000, when=date(2026, 2, 3)),   # spent out of January's salary
-        salary(200_000, when=date(2026, 2, 27)),
-        expense(10_000, when=date(2026, 3, 1)),
+        salary(200_000, when=date(2026, 8, 27)),
+        salary(210_000, when=date(2026, 9, 27)),
     ]
 
-    got = cycles(movements, on=date(2026, 3, 5))
+    month = september(movements)
 
-    assert [(c.start, c.end) for c in got] == [
-        (date(2026, 1, 27), date(2026, 2, 26)),
-        (date(2026, 2, 27), date(2026, 3, 5)),
-    ]
-    assert got[0].spent_cents == 50_000
-    assert got[0].saved_cents == 150_000
-    assert got[1].is_open is True
+    assert month.salary_cents == 200_000
+    assert month.budget_cents == 200_000
 
 
-def test_a_second_payment_in_the_same_month_adds_to_the_cycle():
-    """⚠️ The thirteenth month must not split December into two cycles, one of
-    them five days long with a savings verdict on it."""
+def test_everything_that_is_not_a_salary_counts_where_it_lands():
+    """A refund or a gift is spent in the month it arrives, so it stays there."""
     movements = [
-        salary(200_000, when=date(2026, 12, 27)),
-        salary(180_000, when=date(2026, 12, 15)),  # tredicesima, earlier in the month
+        salary(200_000, when=date(2026, 8, 27)),
+        income(15_000, when=date(2026, 9, 4), category=7),   # a refund, in September
+        income(90_000, when=date(2026, 8, 4), category=7),   # one in August: not ours
     ]
 
-    got = cycles(movements, on=date(2026, 12, 31))
+    month = september(movements)
 
-    assert len(got) == 1
-    assert got[0].start == date(2026, 12, 15)  # the first payment opens it
-    assert got[0].salary_cents == 380_000
+    assert month.other_income_cents == 15_000
+    assert month.budget_cents == 215_000
 
 
-def test_only_the_named_category_is_a_salary():
-    """⚠️ "Any income" would let a 10 € refund open a cycle, and every number
-    after it would be measured over five days."""
+def test_the_spending_is_the_month_s_own():
     movements = [
-        salary(200_000, when=date(2026, 1, 27)),
-        income(1_000, when=date(2026, 2, 10), category=7),  # a refund
+        salary(200_000, when=date(2026, 8, 27)),
+        expense(30_000, when=date(2026, 9, 3)),
+        expense(50_000, when=date(2026, 8, 31)),   # August's problem
+        expense(70_000, when=date(2026, 10, 1)),   # October's
     ]
 
-    got = cycles(movements, on=date(2026, 2, 20))
+    month = september(movements)
 
-    assert len(got) == 1
-    assert got[0].start == date(2026, 1, 27)
+    assert month.spent_cents == 30_000
+    assert month.saved_cents == 170_000
 
 
-def test_transfers_and_rectifications_are_not_salaries_and_not_spending():
-    """The untouchable rule, inside the cycle too."""
+def test_spending_dated_later_in_the_month_counts_now():
+    """⚠️ A rent already recorded for the 28th is money that is going to go. An
+    allowance that ignored it would say you can spend it twice."""
     movements = [
-        salary(200_000, when=date(2026, 1, 27)),
-        transfer(150_000, when=date(2026, 1, 28)),
-        adjustment(5_000, when=date(2026, 1, 29)),
-        expense(20_000, when=date(2026, 1, 30)),
+        salary(200_000, when=date(2026, 8, 27)),
+        expense(80_000, when=date(2026, 9, 28)),
     ]
 
-    got = cycles(movements, on=date(2026, 2, 10))
+    month = september(movements, on=date(2026, 9, 10))
 
-    assert got[0].salary_cents == 200_000
-    assert got[0].spent_cents == 20_000
+    assert month.spent_cents == 80_000
+    assert month.is_open is True
 
 
-def test_spending_before_the_first_salary_belongs_to_no_cycle():
-    """There is no salary it came out of, so there is nothing to judge it
-    against — and quietly attaching it to the first cycle would make that
-    cycle's verdict wrong."""
+def test_transfers_and_rectifications_are_in_none_of_it():
+    """The untouchable rule, inside the goal too."""
     movements = [
-        expense(90_000, when=date(2026, 1, 5)),
-        salary(200_000, when=date(2026, 1, 27)),
+        salary(200_000, when=date(2026, 8, 27)),
+        transfer(150_000, when=date(2026, 9, 2)),
+        adjustment(5_000, when=date(2026, 9, 3)),
+        expense(20_000, when=date(2026, 9, 4)),
     ]
 
-    got = cycles(movements, on=date(2026, 2, 10))
+    month = september(movements)
 
-    assert len(got) == 1
-    assert got[0].spent_cents == 0
+    assert month.budget_cents == 200_000
+    assert month.spent_cents == 20_000
 
 
 def test_the_allowance_is_what_is_left_after_the_target():
-    """"Quanto posso ancora spendere": salary, minus what has gone, minus what
-    has to survive."""
+    """"Quanto posso ancora spendere": budget, minus what has gone, minus what
+    has to survive the month."""
     movements = [
-        salary(200_000, when=date(2026, 2, 27)),
-        expense(60_000, when=date(2026, 3, 2)),
+        salary(200_000, when=date(2026, 8, 27)),
+        expense(60_000, when=date(2026, 9, 2)),
     ]
 
-    open_cycle = cycles(movements, on=date(2026, 3, 10))[-1]
+    month = september(movements, on=date(2026, 9, 10))
 
-    assert open_cycle.allowance_cents(30_000) == 110_000
-    # Spend past it and the number goes negative rather than stopping at zero:
-    # how far past matters.
-    assert open_cycle.allowance_cents(200_000) == -60_000
-
-
-def test_no_salary_category_means_no_cycles_rather_than_a_guess():
-    movements = [salary(200_000, when=date(2026, 1, 27)), expense(1_000)]
-
-    assert stats.salary_cycles(movements, salary_category_id=None, on=date(2026, 3, 1)) == []
+    assert month.allowance_cents(30_000) == 110_000
+    # Past it the number goes negative rather than stopping at zero: how far
+    # past is the part you can act on.
+    assert month.allowance_cents(200_000) == -60_000
 
 
-def test_a_salary_dated_in_the_future_does_not_open_a_cycle_yet():
-    """It has not happened. Opening a cycle on it would end the current one
-    early and pass a verdict on a stretch that is still being lived."""
+def test_two_salaries_in_one_month_both_fund_the_next():
+    """⚠️ The thirteenth month arrives in December and is what January lives on,
+    together with December's pay. Summing them is what stops a windfall from
+    inventing a second, five-day month."""
     movements = [
-        salary(200_000, when=date(2026, 1, 27)),
-        salary(200_000, when=date(2026, 2, 27)),
+        salary(200_000, when=date(2026, 8, 27)),
+        salary(180_000, when=date(2026, 8, 15)),
     ]
 
-    got = cycles(movements, on=date(2026, 2, 10))
+    assert september(movements).salary_cents == 380_000
 
-    assert len(got) == 1
-    assert got[0].is_open is True
+
+def test_without_a_salary_category_there_is_no_shift():
+    """Nothing is a salary, so nothing moves forward: the month is just what
+    came in and what went out. Honest, and the screen asks for the category
+    rather than pretending this is the answer."""
+    movements = [income(200_000, when=date(2026, 9, 5), category=7)]
+
+    month = stats.savings_month(
+        movements, date(2026, 9, 15), salary_category_id=None, on=date(2026, 9, 30)
+    )
+
+    assert month.salary_cents == 0
+    assert month.other_income_cents == 200_000
+
+
+def test_a_month_being_lived_is_marked_open():
+    movements = [salary(200_000, when=date(2026, 8, 27))]
+
+    assert september(movements, on=date(2026, 9, 10)).is_open is True
+    assert september(movements, on=date(2026, 10, 3)).is_open is False

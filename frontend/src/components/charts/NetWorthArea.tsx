@@ -56,9 +56,15 @@ export function NetWorthArea({ months }: { months: MonthPoint[] }) {
         <Area
           type="monotone"
           dataKey="net_worth_cents"
+          name="Patrimonio"
           stroke="var(--color-chart-1)"
           strokeWidth={2}
           fill="url(#net-worth-fill)"
+          isAnimationActive={false}
+          // A dot only where the pointer is: twelve of them at rest would turn
+          // a curve into a dotted line, but with none at all there is nothing
+          // to say "this is the month you are reading".
+          activeDot={{ r: 4, fill: 'var(--color-chart-1)', strokeWidth: 0 }}
         />
       </AreaChart>
     </ResponsiveContainer>

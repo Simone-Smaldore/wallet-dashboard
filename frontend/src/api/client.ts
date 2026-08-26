@@ -147,16 +147,19 @@ export type Household = {
   salary_category_id: number | null
 }
 
-/** One salary-to-salary stretch.
+/** A month judged against the savings goal.
  *
- * ⚠️ The period a savings goal is judged on, and deliberately not the calendar
- * month: money lands on a day that is not the first, and the question is
- * whether one salary was still partly there when the next one arrived. */
-export type Cycle = {
-  start: string
-  /** For the open cycle this is today: nobody knows when the next salary lands. */
-  end: string
+ * ⚠️ The salary that funds a month arrived the month before: pay lands on the
+ * 27th, so September is lived on August's salary and September's own salary
+ * belongs to October. Only the salary shifts — a refund or a gift is spent in
+ * the month it arrives, so it counts where it lands. */
+export type SavingsMonth = {
+  /** First day of the month this is about. */
+  month: string
+  /** The salary from the month before: what this month lives on. */
   salary_cents: number
+  other_income_cents: number
+  budget_cents: number
   spent_cents: number
   saved_cents: number
   is_open: boolean
@@ -166,14 +169,13 @@ export type Savings = {
   target_cents: number | null
   salary_category_id: number | null
   salary_category_name: string | null
-  /** The last cycle a new salary has already closed — the only one that can
-   *  carry a verdict. */
-  closed: Cycle | null
-  /** The one being lived. It gets an allowance instead. */
-  open: Cycle | null
+  /** Last month: finished, so the only one that can carry a verdict. */
+  closed: SavingsMonth | null
+  /** This month. It gets an allowance instead. */
+  open: SavingsMonth | null
   /** Null, not false, when there is nothing to judge yet. */
   met: boolean | null
-  /** What can still be spent this cycle and still hit the target. Negative
+  /** What can still be spent this month and still hit the target. Negative
    *  means the target is already out of reach. */
   allowance_cents: number | null
 }

@@ -10,7 +10,7 @@ import { Card } from '../../components/Card'
 import { EmptyState } from '../../components/EmptyState'
 import { IconButton } from '../../components/IconButton'
 import { formatMoney, formatSigned } from '../../lib/money'
-import { formatDayShort, formatMonth } from '../../lib/period'
+import { formatMonth } from '../../lib/period'
 import { TransactionRow } from '../transactions/TransactionRow'
 import { TransactionSheet } from '../transactions/TransactionSheet'
 import { SavingsTargetSheet } from './SavingsTargetSheet'
@@ -152,23 +152,24 @@ function Figure({ label, value, tone }: { label: string; value: string; tone: st
   )
 }
 
-/** The savings goal, judged the way a salary judges it.
+/** The savings goal, month by month.
  *
- * ⚠️ **The unit is the salary cycle, not the calendar month.** Money lands on
- * the 27th, and the question worth answering is whether November's salary was
- * still partly there when December's arrived — a month boundary cuts that
- * stretch in half and answers something nobody asked. So the verdict belongs to
- * the cycle a new salary has already **closed**: it is the only stretch whose
- * spending is finished.
+ * ⚠️ **The salary that funds a month arrived the month before.** Pay lands on
+ * the 27th, so September is lived on August's salary and September's own salary
+ * belongs to October. Without that shift the month you are in looks broke for
+ * twenty-six days and rich on the twenty-seventh, and a verdict on it would say
+ * nothing about how the month actually went. Only the salary moves: a refund or
+ * a gift is spent where it lands.
  *
- * The cycle being lived gets an allowance instead of a verdict — what can still
- * be spent and still land on the target. A verdict on a fortnight that is half
- * over would be a guess wearing the clothes of a result.
+ * The verdict belongs to **last month**, the only one whose spending is
+ * finished. This month gets an allowance instead — what can still be spent and
+ * still land on the target — which is the one number on this screen you can
+ * still do something about.
  *
  * ⚠️ Every state that is missing something says which thing, in words. No
- * target, no salary category, only one salary so far: three different reasons
- * there is nothing to show, and three different sentences. A bar at zero would
- * be the same picture for all of them and true for none.
+ * target, no salary category, no month to judge yet: three different reasons
+ * for an empty card, and three different sentences. A bar at zero would be the
+ * same picture for all of them and true for none.
  */
 function SavingsTarget({ summary, onEdit }: { summary: Summary; onEdit: () => void }) {
   const { target_cents: target, closed, open, met, allowance_cents: allowance } =
@@ -192,23 +193,23 @@ function SavingsTarget({ summary, onEdit }: { summary: Summary; onEdit: () => vo
       </div>
 
       {target !== null && open !== null && allowance !== null ? (
-        <Allowance cycle={open} target={target} allowance={allowance} />
+        <Allowance month={open} target={target} allowance={allowance} />
       ) : null}
 
       {closed !== null && target !== null ? (
         <p className="mt-3 border-t border-border-soft pt-3 text-caption text-ink-2">
-          {met ? '✓ ' : ''}
-          Dallo stipendio del {formatDayShort(closed.start)} al{' '}
-          {formatDayShort(closed.end)} hai messo da parte{' '}
-          <span className="num text-ink-1">{formatMoney(closed.saved_cents)}</span> di{' '}
-          <span className="num">{formatMoney(target)}</span>.
+          {met ? '✓ ' : ''}A {formatMonth(closed.month)} avevi{' '}
+          <span className="num text-ink-1">{formatMoney(closed.budget_cents)}</span>, ne hai
+          spesi <span className="num text-ink-1">{formatMoney(closed.spent_cents)}</span>:
+          da parte <span className="num text-ink-1">{formatMoney(closed.saved_cents)}</span>{' '}
+          su <span className="num">{formatMoney(target)}</span>.
         </p>
       ) : null}
     </Card>
   )
 }
 
-/** What the last completed cycle decided. */
+/** What last month decided. */
 function Verdict({ summary }: { summary: Summary }) {
   const { target_cents: target, salary_category_id: salaryId, closed, met } =
     summary.savings
@@ -217,7 +218,7 @@ function Verdict({ summary }: { summary: Summary }) {
     return (
       <p className="mt-2 text-body text-ink-2">
         Non ne hai impostato uno. Se ti dai una cifra, qui vedrai quanto puoi ancora
-        spendere prima del prossimo stipendio.
+        spendere questo mese.
       </p>
     )
   }
@@ -225,8 +226,8 @@ function Verdict({ summary }: { summary: Summary }) {
   if (salaryId === null) {
     return (
       <p className="mt-2 text-body text-ink-2">
-        Dimmi quale categoria è lo stipendio: il conto va da uno stipendio al successivo,
-        non da un primo del mese all'altro.
+        Dimmi quale categoria è lo stipendio: il mese si vive con lo stipendio arrivato il
+        mese prima, e senza saperlo il conto non sta in piedi.
       </p>
     )
   }
@@ -234,7 +235,8 @@ function Verdict({ summary }: { summary: Summary }) {
   if (closed === null) {
     return (
       <p className="mt-2 text-body text-ink-2">
-        Aspetto il prossimo stipendio: è quello che dice come è andato questo.
+        Aspetto la fine del mese: il verdetto è sul mese chiuso, l'unico la cui spesa è
+        finita.
       </p>
     )
   }
@@ -246,23 +248,22 @@ function Verdict({ summary }: { summary: Summary }) {
   )
 }
 
-/** What is left to spend before the next salary.
+/** What is left to spend this month.
  *
- * ⚠️ The one number on this screen you can still act on. The bar fills with
- * what has been spent against what was spendable — salary minus target — so
- * "full" means "you are at the line", not "well done".
+ * ⚠️ The bar fills with what has been spent against what was spendable — budget
+ * minus target — so "full" means "you are at the line", not "well done".
  */
 function Allowance({
-  cycle,
+  month,
   target,
   allowance,
 }: {
-  cycle: Summary['savings']['open'] & object
+  month: Summary['savings']['open'] & object
   target: number
   allowance: number
 }) {
-  const spendable = cycle.salary_cents - target
-  const used = spendable > 0 ? Math.min(100, (cycle.spent_cents / spendable) * 100) : 100
+  const spendable = month.budget_cents - target
+  const used = spendable > 0 ? Math.min(100, (month.spent_cents / spendable) * 100) : 100
   const over = allowance < 0
 
   return (
@@ -270,8 +271,8 @@ function Allowance({
       <p className="num text-hero text-ink-1">{formatMoney(Math.abs(allowance))}</p>
       <p className="mt-1 text-caption text-ink-2">
         {over
-          ? 'oltre l’obiettivo, da quando è arrivato lo stipendio'
-          : 'puoi ancora spenderli prima del prossimo stipendio'}
+          ? `oltre l'obiettivo di ${formatMonth(month.month)}`
+          : `puoi ancora spenderli entro ${formatMonth(month.month)}`}
       </p>
 
       <div className="mt-3 h-2 overflow-hidden rounded-pill bg-surface-card-2">
@@ -281,9 +282,14 @@ function Allowance({
         />
       </div>
       <p className="mt-2 text-caption text-ink-3">
-        <span className="num">{formatMoney(cycle.spent_cents)}</span> spesi su{' '}
-        <span className="num">{formatMoney(Math.max(spendable, 0))}</span> dal{' '}
-        {formatDayShort(cycle.start)}
+        <span className="num">{formatMoney(month.spent_cents)}</span> spesi su{' '}
+        <span className="num">{formatMoney(Math.max(spendable, 0))}</span> spendibili
+        {month.salary_cents > 0 ? (
+          <>
+            {' '}· budget <span className="num">{formatMoney(month.budget_cents)}</span>, con
+            lo stipendio del mese scorso
+          </>
+        ) : null}
       </p>
     </div>
   )

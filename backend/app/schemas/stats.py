@@ -75,44 +75,47 @@ class PaceOut(BaseModel):
     projection_cents: int
 
 
-class CycleOut(BaseModel):
-    """One salary-to-salary stretch.
+class SavingsMonthOut(BaseModel):
+    """A month judged against the goal.
 
-    ⚠️ The period a savings goal is judged on, and deliberately not the calendar
-    month: money arrives on a day that is not the first, and the question is
-    whether one salary was still partly there when the next one landed.
+    ⚠️ **The salary that funds a month arrived the month before.** Pay lands on
+    the 27th, so September is lived on August's salary, and September's own
+    salary belongs to October. Only the salary shifts: a refund or a gift is
+    spent in the month it arrives.
     """
 
-    start: DateType
-    #: For the open cycle this is today, because nobody knows when the next
-    #: salary lands. It is the only honest end available for it.
-    end: DateType
+    #: First day of the month this is about.
+    month: DateType
+    #: The salary from the month before, which is what this month lives on.
     salary_cents: int
+    #: Everything else that came in during this month.
+    other_income_cents: int
+    #: Salary plus the rest: what there was to live on.
+    budget_cents: int
     spent_cents: int
-    #: What the salary had left over. Negative means it did not last.
+    #: Budget minus spending. Negative means the month cost more than it had.
     saved_cents: int
+    #: True for the month being lived: it gets an allowance, not a verdict.
     is_open: bool
 
 
 class SavingsOut(BaseModel):
-    """The savings goal, judged the way a salary judges it."""
+    """The savings goal, month by month."""
 
     target_cents: int | None
     salary_category_id: int | None
     salary_category_name: str | None
 
-    #: The last completed cycle: the one a new salary has already closed, and
-    #: therefore the only one that can carry a verdict.
-    closed: CycleOut | None
-    #: The cycle being lived. It gets an allowance, not a verdict.
-    open: CycleOut | None
+    #: Last month: finished, so it is the only one that can carry a verdict.
+    closed: SavingsMonthOut | None
+    #: This month. It gets an allowance instead.
+    open: SavingsMonthOut | None
 
-    #: Whether the closed cycle made the target. Null when there is no closed
-    #: cycle or no target — which is not the same as False, and the screen says
-    #: which.
+    #: Whether last month made the target. Null when there is nothing to judge
+    #: or no target — which is not the same as False, and the screen says which.
     met: bool | None
-    #: How much can still be spent in the open cycle and still hit the target.
-    #: Negative means the target is already out of reach for this cycle.
+    #: How much can still be spent this month and still hit the target. Negative
+    #: means the target is already out of reach.
     allowance_cents: int | None
 
 

@@ -658,37 +658,35 @@ guardando i mesi che hai avuto davvero.
 
 Non è una tabella: c'è un valore solo e i periodi passati si confrontano con quello corrente.
 
-### ⚠️ Il ciclo dello stipendio
+### ⚠️ Il mese che vive con lo stipendio del mese prima
 
-**L'obiettivo non si giudica sul mese solare, si giudica da uno stipendio al successivo.**
-I soldi arrivano il 27, non il primo, e la domanda vera è se lo stipendio di novembre era
-ancora lì quando è arrivato quello di dicembre. Il confine del mese taglia quella tratta a
-metà e risponde a una domanda che nessuno ha fatto.
+**L'obiettivo si giudica sul mese solare, ma lo stipendio conta sul mese dopo.** I soldi
+arrivano il 27: settembre lo vivi con lo stipendio arrivato il 27 agosto, e quello del 27
+settembre è il budget di ottobre. Senza quello spostamento il mese in corso sembra povero
+per ventisei giorni e ricco il ventisettesimo, e un verdetto su di lui non dice niente su
+com'è andato davvero.
 
-- **Un ciclo parte dal primo stipendio di ogni mese solare**; altri pagamenti dello stesso
-  mese si **sommano** a quel ciclo. È ciò che impedisce alla tredicesima di spezzare
-  dicembre in due cicli, uno dei quali lungo cinque giorni con sopra un verdetto sul
-  risparmio.
+- **Budget del mese** = stipendio arrivato nel mese **precedente** + tutte le altre entrate
+  arrivate **in** questo mese.
+- ⚠️ **Solo lo stipendio si sposta.** Un rimborso, un regalo, degli interessi li spendi nel
+  mese in cui arrivano, quindi contano dove atterrano.
+- **Risparmio** = budget − spese del mese. Obiettivo raggiunto se `risparmio ≥ obiettivo`.
 - **Uno stipendio è un'entrata nella categoria che hai indicato tu**
-  (`household.salary_category_id`). ⚠️ Non "una qualsiasi entrata" — un rimborso da 10 €
-  aprirebbe un ciclo — e non "l'entrata più grande del mese", che è una regola che indovina
-  e che il mese in cui vendi qualcosa di costoso sposta i confini senza dirtelo. Se non
-  l'hai scelta, la schermata te lo chiede invece di supporre.
-- **Il verdetto è sul ciclo chiuso**, quello che un nuovo stipendio ha già terminato: è
-  l'unica tratta la cui spesa è finita. Obiettivo raggiunto se
-  `stipendio − speso ≥ obiettivo`.
-- **Il ciclo in corso non ha un verdetto, ha un residuo**: `stipendio − speso − obiettivo`,
-  cioè quanto puoi ancora spendere prima del prossimo stipendio. È l'unico numero della
-  dashboard su cui puoi ancora agire. Negativo vuol dire che l'obiettivo è già fuori
-  portata, e si mostra quanto.
-- ⚠️ **La fine del ciclo in corso è oggi**, perché nessuno sa quando arriva il prossimo
-  stipendio. È l'unico confine onesto disponibile, ed è anche il motivo per cui quel ciclo
-  non può avere un verdetto.
-- **Quello che spendi prima del primo stipendio in assoluto non sta in nessun ciclo**: non
-  c'è uno stipendio da cui sia uscito, quindi non c'è niente contro cui giudicarlo. È una
-semplificazione consapevole — se un giorno servirà la storia dell'obiettivo diventa una
-tabella con `valid_from`, e i mesi passati smetteranno di cambiare valutazione ogni volta che
-alzi l'asticella.
+  (`household.salary_category_id`). ⚠️ Non "una qualsiasi entrata": senza quella distinzione
+  non si sa cosa spostare al mese dopo. Se non l'hai scelta, la schermata te lo chiede
+  invece di supporre.
+- **Due stipendi nello stesso mese si sommano** e finanziano insieme quello dopo: è ciò che
+  impedisce alla tredicesima di inventare un mese in più.
+- **Il verdetto è sul mese chiuso**, l'unico la cui spesa è finita. Il mese in corso non ha
+  un verdetto, ha un **residuo**: `budget − speso − obiettivo`, cioè quanto puoi ancora
+  spendere. È l'unico numero della dashboard su cui puoi ancora agire, e negativo dice di
+  quanto sei oltre.
+- ⚠️ **Nel mese in corso contano anche le spese datate più avanti nel mese.** Un affitto già
+  registrato per il 28 sono soldi che se ne andranno, e un residuo che li ignorasse ti
+  direbbe che puoi spenderli due volte. È la stessa lettura dei saldi: il numero risponde a
+  "quanto resterà".
+
+Tutto questo vive in `domain/stats.savings_month`, e in nessun altro posto.
 
 ## Vocabolari chiusi
 

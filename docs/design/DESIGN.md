@@ -141,6 +141,18 @@ Scala mobile-first:
   una barra.** Ogni riga porta nome, importo, quota e variazione, e deve restare leggibile a
   390px: Recharts qui sarebbe una libreria combattuta, e la prima cosa che troncherebbe
   sono le etichette.
+- ⚠️ **Entrate e uscite divergono da uno zero: un mese è una colonna sola.** Prima erano due
+  barre affiancate, ed era il disegno sbagliato — con una coppia per mese e dodici mesi a
+  schermo, niente ti dice se la barra rossa che stai guardando appartiene alla verde alla
+  sua sinistra o a quella alla sua destra. Leggerlo voleva dire contare. Sopra e sotto uno
+  zero condiviso lo risolve nella struttura invece che con un'etichetta, ed è anche la
+  codifica più onesta: entrate e uscite sono opposte di senso, non due grandezze della
+  stessa cosa. Quello che avanza sull'asse **è** il risparmio del mese.
+  ⚠️ L'asse mostra entrambe le metà come numeri positivi: il lato porta già il segno, e
+  scriverlo due volte sarebbe rumore.
+- ⚠️ **La legenda si scrive, non si eredita.** Tre colori senza chiave è un grafico che va
+  spiegato; quella di Recharts arriva con tipo, spaziature e forme sue, e ristilizzarla
+  costa più che dirla a mano.
 - ⚠️ **La torta è un anello, sei fette e poi "Altro".** Il buco al centro tiene il totale,
   che è il numero di cui le fette sono una proporzione: scriverlo fuori dal grafico
   obbligherebbe a guardare in due posti. Oltre le sei fette la coda si raggruppa, che è la

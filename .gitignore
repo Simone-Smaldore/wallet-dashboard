@@ -17,6 +17,11 @@ backend/.env
 # nome di default finisce nella cartella da cui lanci lo script — cioè qui.
 backup-*.json
 
+# I fogli di calcolo da cui è stato importato lo storico: sono la stessa cosa
+# di un backup — ogni spesa di tre anni, i saldi di ogni conto — solo in un
+# altro formato. Servono per rifare l'import, non per stare in un repository.
+dati_finanza/
+
 # Il progetto di riferimento (food-plan-maker), copiato qui per consultazione.
 # Non è codice di Wallet e non va versionato: sono 175 file di un altro
 # progetto, e dentro c'è anche un backup con i dati di quell'household.

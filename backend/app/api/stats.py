@@ -33,13 +33,13 @@ from app.schemas.account import AccountOut
 from app.schemas.stats import (
     AnalysisOut,
     CategorySliceOut,
-    CycleOut,
     MonthPointOut,
     PaceOut,
     CalendarOut,
     PeriodOut,
-    SeriesOut,
+    SavingsMonthOut,
     SavingsOut,
+    SeriesOut,
     SummaryOut,
     TotalsOut,
 )
@@ -93,20 +93,26 @@ def _savings_out(
     *,
     on: date,
 ) -> SavingsOut:
-    """The goal, judged salary to salary.
+    """The goal, month by month.
 
-    ⚠️ The verdict belongs to the **closed** cycle — the one a new salary has
-    already ended — because that is the only stretch whose spending is finished.
-    The cycle being lived gets an allowance instead: what can still be spent and
-    still land on the target. A verdict on a month that is half over would be a
-    guess dressed as a result.
+    ⚠️ The verdict belongs to **last month**, because that is the only one whose
+    spending is finished. This month gets an allowance instead: what can still
+    be spent and still land on the target. A verdict on a month that is half
+    over would be a guess dressed as a result.
     """
     target = household.monthly_savings_target_cents if household else None
     category_id = household.salary_category_id if household else None
 
-    cycles = domain.salary_cycles(movements, salary_category_id=category_id, on=on)
-    open_cycle = cycles[-1] if cycles else None
-    closed = cycles[-2] if len(cycles) > 1 else None
+    this_month = domain.savings_month(
+        movements, on, salary_category_id=category_id, on=on
+    )
+    last_month = domain.savings_month(
+        movements, shift_month(month_of(on).start, -1), salary_category_id=category_id, on=on
+    )
+
+    # Nothing came in and nothing went out: there is no month to judge, which is
+    # a different thing from a month that missed its target.
+    judged = last_month if (last_month.budget_cents or last_month.spent_cents) else None
 
     category = db.get(Category, category_id) if category_id is not None else None
 
@@ -114,27 +120,26 @@ def _savings_out(
         target_cents=target,
         salary_category_id=category_id,
         salary_category_name=category.name if category else None,
-        closed=_cycle_out(closed),
-        open=_cycle_out(open_cycle),
-        # Null rather than False when there is nothing to judge: "you missed it"
-        # and "I cannot say yet" are different things to show.
-        met=None if closed is None or target is None else closed.saved_cents >= target,
+        closed=_month_out(judged),
+        open=_month_out(this_month),
+        met=None if judged is None or target is None else judged.saved_cents >= target,
         allowance_cents=(
-            None if open_cycle is None or target is None else open_cycle.allowance_cents(target)
+            None if target is None else this_month.allowance_cents(target)
         ),
     )
 
 
-def _cycle_out(cycle: domain.SalaryCycle | None) -> CycleOut | None:
-    if cycle is None:
+def _month_out(month: domain.SavingsMonth | None) -> SavingsMonthOut | None:
+    if month is None:
         return None
-    return CycleOut(
-        start=cycle.start,
-        end=cycle.end,
-        salary_cents=cycle.salary_cents,
-        spent_cents=cycle.spent_cents,
-        saved_cents=cycle.saved_cents,
-        is_open=cycle.is_open,
+    return SavingsMonthOut(
+        month=month.month,
+        salary_cents=month.salary_cents,
+        other_income_cents=month.other_income_cents,
+        budget_cents=month.budget_cents,
+        spent_cents=month.spent_cents,
+        saved_cents=month.saved_cents,
+        is_open=month.is_open,
     )
 
 

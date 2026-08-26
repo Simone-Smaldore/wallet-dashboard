@@ -12,8 +12,8 @@ import { formatMoney, parseAmountField } from '../../lib/money'
 /** How much you mean to put aside, and what counts as a salary.
  *
  * The two live in the same sheet because neither works without the other: a
- * target with no salary to judge it against has nothing to say, and naming the
- * salary without a target measures a stretch against nothing.
+ * target with no salary behind it has nothing to judge, and naming the salary
+ * without a target measures a month against nothing.
  *
  * ⚠️ The amount is kept as a string while it is typed and turned into cents
  * only on save — like every other amount here, and for the same reason:
@@ -41,9 +41,9 @@ export function SavingsTargetSheet({
   const [salaryId, setSalaryId] = useState<number | null>(savings.salary_category_id)
   const [error, setError] = useState<string | null>(null)
 
-  // ⚠️ Income categories only. A spending category here would make every cycle
-  // start on a grocery run — the server refuses it too, this just never offers
-  // the mistake.
+  // ⚠️ Income categories only. A spending category here would make a trip to
+  // the butcher fund next month — the server refuses it too, this just never
+  // offers the mistake.
   const income = (categories.data ?? []).filter(
     (category) => category.kind === 'income' && !category.is_archived,
   )
@@ -81,7 +81,7 @@ export function SavingsTargetSheet({
     <Sheet title="Obiettivo di risparmio" onClose={onClose}>
       <form onSubmit={save} className="flex flex-col gap-4">
         <Field
-          label="Da uno stipendio al successivo metto da parte"
+          label="Ogni mese metto da parte"
           inputMode="decimal"
           autoFocus
           value={amount}
@@ -100,17 +100,16 @@ export function SavingsTargetSheet({
             groups={[{ label: 'Entrate', options: income.map(toOption) }]}
           />
           <p className="text-caption text-ink-3">
-            Ogni entrata in questa categoria apre un nuovo ciclo. Se ne arriva una seconda
-            nello stesso mese — la tredicesima, degli arretrati — si somma a quello in
-            corso invece di spezzarlo in due.
+            ⚠️ Serve perché lo stipendio conta sul mese <em>dopo</em>: quello del 27 agosto
+            è quello con cui vivi settembre. Le altre entrate no, quelle contano nel mese
+            in cui arrivano.
           </p>
         </div>
 
         <p className="text-caption text-ink-3">
-          Il conto va da uno stipendio al successivo, non dal primo del mese: quello che
-          conta è se lo stipendio di novembre c'era ancora quando è arrivato quello di
-          dicembre. I trasferimenti fra i tuoi conti non contano — spostare i soldi non è
-          metterli da parte.
+          Il budget di un mese è lo stipendio arrivato il mese prima più le altre entrate
+          del mese; il risparmio è quello meno le spese del mese. I trasferimenti fra i
+          tuoi conti non contano — spostare i soldi non è metterli da parte.
         </p>
 
         <div className="flex justify-end gap-2">

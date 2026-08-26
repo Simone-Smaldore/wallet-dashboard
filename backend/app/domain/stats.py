@@ -21,6 +21,10 @@ across three accounts would read as three incomes and three expenses, and every
 figure on the screen would be inflated by an arbitrary amount. The test that
 proves it is the one test in this project that does not get touched.
 
+⚠️ **The savings goal is judged on a calendar month whose salary arrived the
+month before.** Pay lands on the 27th; September is lived on August's salary.
+`savings_month` is the only place that says so.
+
 ⚠️ **An adjustment is not consumption.** It is the measure of what you forgot to
 record. It moves the balance and it stays out of every spending figure: filing it
 under a category would invent a spend you cannot account for, and a skewed pie is
@@ -38,10 +42,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date as Date, timedelta
+from datetime import date as Date
 
 from app.domain.balances import AccountRow, MovementRow, net_worth
-from app.domain.period import Period, month_of
+from app.domain.period import Period, month_of, shift_month
 from app.domain.vocabulary import TransactionKind
 
 #: How many shares add up to a whole. Per mille rather than per cent: one
@@ -137,108 +141,99 @@ class Pace:
 
 
 @dataclass(frozen=True)
-class SalaryCycle:
-    """The stretch of time one salary has to last.
+class SavingsMonth:
+    """A month, and whether it saved what it was supposed to save.
 
-    ⚠️ **This, and not the calendar month, is the period a savings goal is
-    judged on.** Money arrives on a day of the month that is not the first, and
-    what matters is whether the salary that arrived in November was still
-    partly there when December's arrived. A calendar month cuts that stretch in
-    the middle and answers a question nobody asked.
+    ⚠️ **The salary that funds a month arrives in the month before it.** Pay
+    lands on the 27th and is what September is lived on, so September's budget
+    is August's salary plus whatever else came in during September — and
+    September's own salary, arriving on the 27th, belongs to October.
 
-    `is_open` marks the cycle being lived right now: its end is *unknown* —
-    nobody knows when the next salary lands — so it is cut at the day being
-    asked about. That is the only honest boundary available for it, and it is
-    why an open cycle gets an allowance rather than a verdict.
+    Without that shift the month you are living looks flush for twenty-six days
+    and then rich on the twenty-seventh, and a verdict on it says nothing about
+    how the month actually went.
+
+    ⚠️ **Only the salary shifts.** A refund, a gift, a bit of interest are spent
+    in the month they arrive, so they count where they land.
     """
 
-    start: Date
-    end: Date
+    #: First day of the month this is about.
+    month: Date
+    #: The salary that arrived the month before, and funds this one.
     salary_cents: int
+    #: Everything else that came in *during* this month.
+    other_income_cents: int
     spent_cents: int
+    #: True for the month being lived: it gets an allowance, not a verdict.
     is_open: bool
 
     @property
+    def budget_cents(self) -> int:
+        """What there was to live on."""
+        return self.salary_cents + self.other_income_cents
+
+    @property
     def saved_cents(self) -> int:
-        """What the salary had left over. Negative means it did not last."""
-        return self.salary_cents - self.spent_cents
+        """What is left over. Negative means the month cost more than it had."""
+        return self.budget_cents - self.spent_cents
 
     def allowance_cents(self, target_cents: int) -> int:
-        """What can still be spent and still hit the target."""
-        return self.salary_cents - self.spent_cents - target_cents
+        """What can still be spent this month and still hit the target."""
+        return self.saved_cents - target_cents
 
 
-def salary_cycles(
+def savings_month(
     movements: Iterable[MovementRow],
+    month: Date,
     *,
     salary_category_id: int | None,
     on: Date,
-) -> list[SalaryCycle]:
-    """The salary-to-salary cycles, oldest first.
+) -> SavingsMonth:
+    """How one month is doing against the goal.
 
-    A salary is an income movement in the one category you have named as such.
-    ⚠️ Not "any income": a 10 € refund would open a cycle and every number after
-    it would be measured over five days. And not "the biggest income of the
-    month" either — that is a rule that guesses, and the month you sell
-    something expensive it would move the boundaries without telling you.
+    `month` is any day inside the month being asked about; `on` is today, which
+    only decides whether that month is still being lived.
 
-    ⚠️ **A cycle starts at the first salary payment of a calendar month**, and
-    any further payment in that same month is added to it. That is what keeps a
-    thirteenth month in December from splitting the month into two cycles, one
-    of them five days long with a savings verdict attached. It costs an edge:
-    a salary paid on the 31st and the next on the 1st are two cycles, one a day
-    long — real, rare, and visible rather than silently smoothed away.
+    ⚠️ The whole month's spending counts, **including anything dated later in
+    it**. A rent you have already recorded for the 28th is money that is going
+    to go, and an allowance that ignored it would tell you that you can spend it
+    twice. This is the same reading the balances take — the number answers "what
+    will be left", not "what is in the account this second".
 
-    Anything before the first salary is not in any cycle. There is no salary it
-    was being spent out of, so there is nothing to judge it against.
+    ⚠️ Transfers and adjustments are in none of it, here as everywhere.
     """
-    if salary_category_id is None:
-        return []
+    this = month_of(month)
+    before = month_of(shift_month(this.start, -1))
 
-    payments = [
-        movement
-        for movement in movements
-        if is_income(movement)
-        and movement.category_id == salary_category_id
-        and movement.date <= on
-    ]
-    if not payments:
-        return []
+    salary = 0
+    other = 0
+    spent = 0
 
-    # First payment of each month opens the cycle; the rest of that month adds
-    # to it.
-    by_month: dict[tuple[int, int], tuple[Date, int]] = {}
-    for payment in payments:
-        key = (payment.date.year, payment.date.month)
-        start, total = by_month.get(key, (payment.date, 0))
-        by_month[key] = (min(start, payment.date), total + payment.amount_cents)
-
-    opened = sorted(by_month.values())
-    spends = [movement for movement in movements if is_spend(movement)]
-
-    cycles = []
-    for index, (start, salary) in enumerate(opened):
-        is_open = index == len(opened) - 1
-        end = on if is_open else opened[index + 1][0] - timedelta(days=1)
-        if end < start:
-            # Two salaries on consecutive days: the earlier cycle has no days in
-            # it at all. Dropping it is better than a zero-length verdict.
+    for movement in movements:
+        if is_spend(movement) and this.contains(movement.date):
+            spent += movement.amount_cents
+            continue
+        if not is_income(movement):
             continue
 
-        cycles.append(
-            SalaryCycle(
-                start=start,
-                end=end,
-                salary_cents=salary,
-                spent_cents=sum(
-                    movement.amount_cents
-                    for movement in spends
-                    if start <= movement.date <= end
-                ),
-                is_open=is_open,
-            )
+        is_salary = (
+            salary_category_id is not None
+            and movement.category_id == salary_category_id
         )
-    return cycles
+        if is_salary:
+            # The salary of the month before is what this month lives on.
+            if before.contains(movement.date):
+                salary += movement.amount_cents
+        elif this.contains(movement.date):
+            other += movement.amount_cents
+
+    return SavingsMonth(
+        month=this.start,
+        salary_cents=salary,
+        other_income_cents=other,
+        spent_cents=spent,
+        is_open=this.contains(on),
+    )
 
 
 def totals(movements: Iterable[MovementRow], period: Period) -> Totals:
