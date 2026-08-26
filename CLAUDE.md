@@ -592,6 +592,19 @@ vecchia che non si aggiorna più.
 a schermo pieno, il `display` del manifest non basta. Status bar `default`, non
 `black-translucent`, altrimenti il contenuto finisce sotto l'orologio.
 
+⚠️ **Quello che si copia non è quasi mai il link che è stato spedito.** Gmail riscrive ogni
+link in `https://www.google.com/url?q=<il link, codificato>&source=…`: il token non è nella
+query, è dentro un altro indirizzo, percent-encoded, dentro un parametro `q`. Altri client
+aggiungono parametri di tracciamento o lo incollano dentro una frase. `tokenFromPaste`
+perciò **cerca `token=` ovunque nel testo, dopo aver decodificato**, e accetta anche il
+token nudo. Leggere solo `?token=` dall'URL di primo livello sbagliava proprio il caso più
+comune che esista.
+
+⚠️ **E l'errore lo dice il server, non lo schermo.** Il campo mostrava un testo scritto a
+mano — "non è valido, o è già stato usato" — per qualsiasi fallimento, compreso quello in
+cui il link non era stato nemmeno letto. Una diagnosi sbagliata è peggio di nessuna
+diagnosi: manda a chiedere un altro link, che fallisce allo stesso modo.
+
 ⚠️ **Il campo "incolla il link" nella schermata di accesso serve solo in standalone.** Su iOS
 un'app aggiunta alla home ha uno spazio dati separato da Safari: il magic link apre Safari, la
 sessione nasce lì, e l'app installata resta scollegata — senza barra degli indirizzi da cui

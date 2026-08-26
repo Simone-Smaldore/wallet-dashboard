@@ -107,22 +107,33 @@ function PasteLink() {
   const navigate = useNavigate()
   const { setUser } = useSession()
   const [value, setValue] = useState('')
-  const [state, setState] = useState<'idle' | 'working' | 'error'>('idle')
+  const [working, setWorking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
+    setError(null)
+
     const token = tokenFromPaste(value)
     if (!token) {
-      setState('error')
+      // ⚠️ Its own message. This used to say "già usato" like every other
+      // failure, which blamed the token for a link the app had simply failed to
+      // read — and sent you off to ask for another one that failed the same
+      // way. A wrong diagnosis is worse than none.
+      setError('Non trovo un link di accesso in quello che hai incollato.')
       return
     }
 
-    setState('working')
+    setWorking(true)
     try {
       setUser(await api.verify(token))
       void navigate('/riepilogo', { replace: true })
-    } catch {
-      setState('error')
+    } catch (cause) {
+      // ⚠️ The server's own words. It knows whether the link was used, expired
+      // or unknown; the screen does not, and guessing was the bug.
+      setError(cause instanceof Error ? cause.message : 'Non è stato possibile entrare.')
+    } finally {
+      setWorking(false)
     }
   }
 
@@ -133,7 +144,8 @@ function PasteLink() {
       </h2>
       <p className="mt-1.5 text-caption text-ink-2">
         Nella mail tieni premuto il link e scegli Copia — non aprirlo, si usa una volta
-        sola. Poi incollalo qui.
+        sola. Poi incollalo qui: va bene anche se il tuo programma di posta te lo copia
+        avvolto in un altro indirizzo.
       </p>
 
       <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
@@ -142,19 +154,17 @@ function PasteLink() {
           value={value}
           onChange={(event) => {
             setValue(event.target.value)
-            setState('idle')
+            setError(null)
           }}
           placeholder="incolla il link"
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          error={
-            state === 'error' ? 'Questo link non è valido, o è già stato usato.' : null
-          }
+          error={error}
         />
 
-        <Button type="submit" disabled={state === 'working'}>
-          {state === 'working' ? 'Entro…' : 'Entra'}
+        <Button type="submit" disabled={working}>
+          {working ? 'Entro…' : 'Entra'}
         </Button>
       </form>
     </Card>
