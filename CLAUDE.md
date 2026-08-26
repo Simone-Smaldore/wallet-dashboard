@@ -572,6 +572,22 @@ fascia che dice che sei senza rete.
 Il service worker **si registra solo in produzione** (`import.meta.env.PROD` in `main.tsx`):
 in sviluppo servirebbe il bundle di ieri e ogni modifica sembrerebbe non applicata.
 
+⚠️ **Il bollino del browser sull'icona non è un difetto del manifest, è il
+browser.** Android toglie l'icona di Chrome/Brave dalla scorciatoia solo quando
+l'installazione produce un **WebAPK**, cioè un vero pacchetto Android che
+*Google Play Services* genera su richiesta del browser. **Brave quel servizio non
+lo usa** — scelta loro, di privacy — quindi installa una scorciatoia col bollino,
+e nelle app recenti compare l'identità di Brave. Da Chrome, sullo stesso
+telefono e con lo stesso manifest, l'installazione è pulita. Non c'è niente da
+cambiare qui: il manifest ha già name, short_name, start_url, `display:
+standalone`, scope, le icone 192 e 512 e una maskable, che sono tutti i
+requisiti.
+
+⚠️ **`id` nel manifest**: è ciò che dice ad Android "questa è la stessa app di
+prima". Senza, l'identità viene dedotta da `start_url`, e il giorno che quello
+cambia il telefono la tratta come un'app nuova — due icone sulla home e la
+vecchia che non si aggiorna più.
+
 **Su iOS i meta contano ancora**: `apple-mobile-web-app-capable` è ciò che fa partire davvero
 a schermo pieno, il `display` del manifest non basta. Status bar `default`, non
 `black-translucent`, altrimenti il contenuto finisce sotto l'orologio.

@@ -280,40 +280,54 @@ function AccountCard({
           )}
 
           <ul className="mt-1 flex flex-col gap-1 border-t border-border-soft pt-2">
+            {/* ⚠️ Both actions are written out, and the row itself is not a
+                button. It was one, and the way you found out was by poking at
+                it — the first person to use this asked me how to open an asset,
+                and I had to go and read the code. A hidden tap target is a
+                feature that exists only for whoever built it, and on a phone
+                there is not even a hover to hint at it. */}
             {assets.map((asset) => (
-              <li key={asset.id}>
-                <button
-                  type="button"
-                  onClick={() => onEditAsset?.(asset)}
-                  className="flex w-full items-baseline justify-between gap-2 rounded-control px-1 py-0.5 text-left transition-colors duration-200 hover:bg-surface-hover"
-                >
-                  <span className="min-w-0 flex-1 truncate text-caption text-ink-2">
+              <li key={asset.id} className="px-1 py-0.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="min-w-0 flex-1 truncate text-caption text-ink-2">
                     {asset.name}
-                  </span>
-                  <span className="num shrink-0 text-caption text-ink-1">
+                  </p>
+                  <p className="num shrink-0 text-caption text-ink-1">
                     {asset.value_cents === null ? '—' : formatMoney(asset.value_cents)}
-                  </span>
-                </button>
+                  </p>
+                </div>
+
                 {/* ⚠️ The day the number was true, next to the number. Prices
                     come once a day and markets shut: a value that looks current
                     and is not is the one failure that matters here. */}
-                <div className="flex items-baseline justify-between gap-2 px-1">
-                  <p className="text-micro text-ink-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="min-w-0 flex-1 truncate text-micro text-ink-3">
                     {asset.quantity}
                     {asset.valued_on ? ` · al ${formatDayShort(asset.valued_on)}` : ''}
                   </p>
-                  {/* ⚠️ The monthly gesture, next to the thing it is about.
-                      "Aggiungi" makes a new holding; this one grows an existing
-                      one and records the money in the same breath. */}
-                  {onBuyAsset ? (
-                    <button
-                      type="button"
-                      onClick={() => onBuyAsset(asset)}
-                      className="text-micro text-ink-3 transition-colors duration-200 hover:text-accent"
-                    >
-                      Ho comprato
-                    </button>
-                  ) : null}
+                  <div className="flex shrink-0 items-baseline gap-3">
+                    {/* The monthly gesture, next to the thing it is about.
+                        "Aggiungi" makes a new holding; this one grows an
+                        existing one and records the money in the same breath. */}
+                    {onBuyAsset ? (
+                      <button
+                        type="button"
+                        onClick={() => onBuyAsset(asset)}
+                        className="text-micro text-accent transition-colors duration-200 hover:text-accent-hover"
+                      >
+                        Ho comprato
+                      </button>
+                    ) : null}
+                    {onEditAsset ? (
+                      <button
+                        type="button"
+                        onClick={() => onEditAsset(asset)}
+                        className="text-micro text-ink-3 transition-colors duration-200 hover:text-ink-1"
+                      >
+                        Modifica
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </li>
             ))}
