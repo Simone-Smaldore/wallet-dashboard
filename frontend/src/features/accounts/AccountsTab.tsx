@@ -3,21 +3,27 @@ import { Archive, ArchiveRestore, Pencil, Plus, Scale } from 'lucide-react'
 
 import { api, type Account } from '../../api/client'
 import { useQuery } from '../../api/cache'
+import { Amount } from '../../components/Amount'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { EmptyState } from '../../components/EmptyState'
 import { IconButton } from '../../components/IconButton'
-import { formatMoney } from '../../lib/money'
 import { AccountForm, KIND_LABELS } from './AccountForm'
 import { ReconcileSheet } from './ReconcileSheet'
 
 export function AccountsTab() {
-  const { data, loading, error, refetch } = useQuery('/api/accounts', api.accounts)
+  // ⚠️ `fromDisk` is true while these came back from a previous session's
+  // localStorage. The names are safe to show — they are labels. The balances
+  // are not, and every amount below is held at a dash until the fresh copy
+  // lands: see components/Amount.tsx.
+  const { data, loading, fromDisk, error, refetch } = useQuery(
+    '/api/accounts',
+    api.accounts,
+  )
   const [editing, setEditing] = useState<Account | null>(null)
   const [creating, setCreating] = useState(false)
   const [reconciling, setReconciling] = useState<Account | null>(null)
 
-  if (loading) return null
   if (error && !data) {
     return (
       <EmptyState title="Non riesco a leggere i conti">
@@ -32,20 +38,22 @@ export function AccountsTab() {
   const accounts = data?.accounts ?? []
   const active = accounts.filter((account) => !account.is_archived)
   const archived = accounts.filter((account) => account.is_archived)
+  // Nothing at all yet — not even a remembered copy.
+  const empty = loading && !data
 
   return (
     <div className="flex flex-col gap-3">
       <Card>
         <p className="text-micro uppercase text-ink-3">Patrimonio</p>
-        <p className="num mt-1 text-hero text-ink-1">
-          {formatMoney(data?.net_worth_cents ?? 0)}
+        <p className="mt-1 text-hero text-ink-1">
+          <Amount cents={data?.net_worth_cents ?? 0} pending={fromDisk || empty} />
         </p>
         <p className="mt-1 text-caption text-ink-2">
           Somma dei conti che contano nel patrimonio.
         </p>
       </Card>
 
-      {accounts.length === 0 ? (
+      {empty ? null : accounts.length === 0 ? (
         <EmptyState title="Nessun conto">
           Comincia da dove tieni i soldi: il conto corrente, il deposito, il contante in
           tasca. Il saldo che scrivi qui è il punto da cui parte il conteggio.
@@ -70,6 +78,7 @@ export function AccountsTab() {
             <AccountCard
               key={account.id}
               account={account}
+              pending={fromDisk}
               onEdit={() => setEditing(account)}
               onReconcile={() => setReconciling(account)}
             />
@@ -85,6 +94,7 @@ export function AccountsTab() {
               <AccountCard
                 key={account.id}
                 account={account}
+                pending={fromDisk}
                 onEdit={() => setEditing(account)}
                 onReconcile={() => setReconciling(account)}
               />
@@ -129,10 +139,13 @@ export function AccountsTab() {
  */
 function AccountCard({
   account,
+  pending,
   onEdit,
   onReconcile,
 }: {
   account: Account
+  /** The name is remembered; the balance is not known yet. */
+  pending: boolean
   onEdit: () => void
   onReconcile: () => void
 }) {
@@ -178,11 +191,11 @@ function AccountCard({
           negative: an account in the red is worth noticing without doing the
           arithmetic of reading a minus sign. */}
       <p
-        className={`num text-title ${
-          account.balance_cents < 0 ? 'text-money-expense' : 'text-ink-1'
+        className={`text-title ${
+          !pending && account.balance_cents < 0 ? 'text-money-expense' : 'text-ink-1'
         }`}
       >
-        {formatMoney(account.balance_cents)}
+        <Amount cents={account.balance_cents} pending={pending} />
       </p>
 
       <p className="truncate text-caption text-ink-2">

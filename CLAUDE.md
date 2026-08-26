@@ -835,8 +835,38 @@ si sostituisce con la libreria.
 lettura da rinfrescare. Si tiene per conto suo, con il cursore keyset, e non passa dalla cache
 delle letture.
 
-**Attesa visibile.** Ogni richiesta in primo piano alza `BusyOverlay`, che blocca la pagina.
-Due esclusioni:
+⚠️ **Due chiavi sopravvivono alla chiusura della pagina, e solo due**: `/api/accounts` e
+`/api/categories`, in `localStorage` sotto `wallet:cache:`. Sono anagrafiche — un nome, un
+colore, un'icona — le legge quasi ogni schermata, e sono ciò che fa aprire il foglio di
+inserimento già pieno invece che dopo un giro sul server. La lista è un elenco chiuso in
+`api/cache.ts`, non una politica generale.
+
+⚠️ **Dal disco tornano i nomi, non gli importi.** `/api/accounts` porta anche
+`balance_cents`, che cambia a ogni movimento: `useQuery` restituisce un `fromDisk`, e finché
+è vero le schermate mostrano il nome e **un trattino al posto del numero**. Un saldo di ieri
+stampato con sicurezza è il caso peggiore di questo progetto — su un numero mancante indaghi,
+di uno sbagliato ti fidi. `/api/stats/*` e i movimenti non vanno su disco per niente.
+
+⚠️ **Il disco si svuota al logout** (`clearCache()`) e quando l'utente è un altro. Vale la
+stessa ragione scritta per il service worker: una cache che sopravvive alla sessione
+servirebbe i dati di una sessione chiusa a chi apre l'app dopo. Il token di sessione, quello,
+resta dove è sempre stato — nel cookie `httpOnly`, mai in `localStorage`.
+
+⚠️ **Attesa visibile: `BusyOverlay` è per le scritture.** Blocca la pagina perché un
+salvataggio non si tocchi due volte e perché tu sappia che i soldi sono arrivati.
+
+**Le letture non lo alzano.** Una `GET` è silenziosa per default (`api/client.ts`), e la
+regola qui diceva il contrario: *"ogni richiesta in primo piano"*. Era sbagliata, e si è
+vista all'uso — ogni apertura dell'app, ogni cambio di periodo, ogni scadenza dei 30 secondi
+di freschezza metteva uno scrim a schermo intero, e l'app sembrava lenta. Una lettura non ha
+niente da proteggere: se fallisce, lo schermo resta com'era. Bloccare tutto per andare a
+prendere un elenco di categorie fa pagare a ogni schermata il prezzo pensato per il gesto che
+conta.
+
+**Una schermata che si sta riempiendo lo dice da sé**, con la sua struttura già a posto e i
+numeri a trattino (`components/Amount.tsx`), non con uno scrim sopra una pagina bianca.
+
+Le altre due esclusioni restano:
 
 - **I refresh in background della cache non contano.** Bloccare la pagina per un aggiornamento
   che non hai chiesto annullerebbe il senso della cache.

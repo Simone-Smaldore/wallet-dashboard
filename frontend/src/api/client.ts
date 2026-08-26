@@ -260,8 +260,23 @@ type Options = {
   quiet?: boolean
 }
 
+/** ⚠️ **The overlay is for writes.**
+ *
+ * It blocks the page so a save cannot be tapped twice and so you know the money
+ * landed — which is why saving a movement waits for the server on purpose. A
+ * read has none of that: if it fails, the screen stays as it was.
+ *
+ * So a GET is quiet by default. Blocking the whole app to go and fetch a list
+ * of categories charges every screen the price that was meant for the one
+ * gesture that matters, and it is what made the app feel slow: every cache miss
+ * — every cold open, every change of period — put a full-screen scrim up.
+ *
+ * A screen that is loading says so itself, in its own layout. A screen that is
+ * saving is held still.
+ */
 async function request<T>(path: string, options: Options = {}): Promise<T> {
   const { method = 'GET', body } = options
+  const quiet = options.quiet ?? method === 'GET'
 
   const run = async (): Promise<T> => {
     const response = await fetch(path, {
@@ -287,7 +302,7 @@ async function request<T>(path: string, options: Options = {}): Promise<T> {
     return payload as T
   }
 
-  return options.quiet ? run() : busyWhile(run)
+  return quiet ? run() : busyWhile(run)
 }
 
 /** Pull something readable out of an error body.

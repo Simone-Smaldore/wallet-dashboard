@@ -21,11 +21,13 @@ import { CategoryForm } from './CategoryForm'
  * leaving two thirds of a desktop screen empty next to a column of names.
  */
 export function CategoriesTab() {
-  const { data, loading, error, refetch } = useQuery('/api/categories', api.categories)
+  const { data, error, refetch } = useQuery('/api/categories', api.categories)
   const [editing, setEditing] = useState<Category | null>(null)
   const [creating, setCreating] = useState<CategoryKind | null>(null)
 
-  if (loading) return null
+  // No `loading` guard: categories are names, and a name remembered from the
+  // last session is still that name. If there is nothing at all yet the two
+  // groups draw their own empty state, which is the honest thing to show.
   if (error && !data) {
     return (
       <EmptyState title="Non riesco a leggere le categorie">

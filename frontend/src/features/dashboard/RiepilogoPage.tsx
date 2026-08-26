@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router'
 
 import { useQuery } from '../../api/cache'
 import { api, type Account, type Summary } from '../../api/client'
+import { Amount } from '../../components/Amount'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { EmptyState } from '../../components/EmptyState'
@@ -22,13 +23,10 @@ import { SavingsTargetSheet } from './SavingsTargetSheet'
  * screen that gets opened more often than any other.
  */
 export function RiepilogoPage() {
-  const { data, loading, error, refetch } = useQuery('/api/stats/summary', () =>
-    api.summary(),
-  )
+  const { data, error, refetch } = useQuery('/api/stats/summary', () => api.summary())
   const [editingTarget, setEditingTarget] = useState(false)
   const [opening, setOpening] = useState<Summary['recent'][number] | null>(null)
 
-  if (loading) return null
   if (error && !data) {
     return (
       <EmptyState title="Non riesco a leggere il riepilogo">
@@ -39,7 +37,12 @@ export function RiepilogoPage() {
       </EmptyState>
     )
   }
-  if (!data) return null
+  // ⚠️ Nothing is remembered on this screen — it is all amounts, and amounts
+  // do not come off a disk. So while the first request is in flight the page
+  // draws itself with its numbers held at a dash, instead of a blank rectangle
+  // under a scrim. A screen that is filling in is not a screen that is broken,
+  // and it should not look like one.
+  if (!data) return <Skeleton />
 
   const nothingYet = data.accounts.length === 0
 
@@ -80,6 +83,34 @@ export function RiepilogoPage() {
       {opening ? (
         <TransactionSheet movement={opening} onClose={() => setOpening(null)} />
       ) : null}
+    </div>
+  )
+}
+
+/** The shape of the page, before the numbers arrive. */
+function Skeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      <h1 className="font-display text-title text-ink-1">Riepilogo</h1>
+      <Card>
+        <p className="text-micro uppercase text-ink-3">Patrimonio</p>
+        <p className="mt-1 text-hero text-ink-1">
+          <Amount cents={0} pending />
+        </p>
+      </Card>
+      <Card>
+        <p className="text-micro uppercase text-ink-3">Questo mese</p>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          {['Entrate', 'Uscite', 'Risparmio'].map((label) => (
+            <div key={label} className="min-w-0">
+              <p className="truncate text-caption text-ink-2">{label}</p>
+              <p className="mt-0.5 text-heading text-ink-1">
+                <Amount cents={0} pending />
+              </p>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   )
 }

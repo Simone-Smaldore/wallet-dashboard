@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { setCacheOwner } from '../../api/cache'
 import { api, type CurrentUser } from '../../api/client'
 
 /** Who is signed in, asked once at startup and kept in context.
@@ -22,6 +23,14 @@ const SessionContext = createContext<SessionValue | null>(null)
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // ⚠️ The read cache keeps accounts and categories on disk between sessions,
+  // so it has to be told whose they are. A different id — or none — drops them:
+  // a cache that outlives its session would hand one person's data to whoever
+  // opens the app next.
+  useEffect(() => {
+    setCacheOwner(user?.id ?? null)
+  }, [user?.id])
 
   const refresh = useCallback(async () => {
     try {
