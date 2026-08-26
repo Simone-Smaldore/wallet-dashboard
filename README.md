@@ -5,13 +5,16 @@ categorie, saldi e grafici.
 
 - Convenzioni e regole di dominio: [`CLAUDE.md`](CLAUDE.md)
 - Piano di progetto: [`docs/plan/plan-v1.md`](docs/plan/plan-v1.md)
-- Design system: `docs/design/DESIGN.md` — **da produrre**
+- Design system: [`docs/design/DESIGN.md`](docs/design/DESIGN.md)
 
-> ⚠️ **Stato: nessuna riga di codice.** Nel repository ci sono solo i tre documenti qui
-> sopra. Tutto ciò che segue — comandi, struttura, script, deploy — descrive **come sarà il
-> progetto**, non come è adesso: è la sponda contro cui verificare l'implementazione, e va
-> riletto e corretto a valle di ogni milestone. Finché M0 non è fatto, nessuno di questi
-> comandi funziona.
+> **Stato: la V1 è completa** — M0 → M5. Si entra con un magic link, ci sono conti,
+> categorie e movimenti (uscite, entrate, trasferimenti) con elenco filtrabile e
+> riconciliazione, il riepilogo con l'obiettivo di risparmio giudicato da uno stipendio al
+> successivo, l'analisi con i grafici, e l'app si installa sulla home del telefono. Gli
+> otto script di manutenzione ci sono tutti.
+>
+> Da qui in avanti: **V1.5** import CSV e movimenti ricorrenti, **V2** investimenti e
+> patrimonio completo. Il piano li descrive.
 
 ## Cosa fa
 
@@ -149,9 +152,8 @@ uno script.
 
 ### Cosa c'è
 
-⚠️ **Oggi esistono solo `backup` e `restore`**, scritti a M2 insieme ai primi dati che
-valeva la pena perdere. Gli altri sono descritti qui perché il loro comportamento è già
-deciso, ma arrivano a M5: se ne lanci uno adesso, Python ti dirà che il modulo non c'è.
+Tutti e otto, e fanno quello che è scritto qui sotto. `backup` e `restore` sono di M2 —
+sono arrivati insieme ai primi dati che valeva la pena perdere — gli altri sei di M5.
 
 #### `backup` — esporta tutto
 
@@ -197,8 +199,12 @@ python -m scripts.doctor              # sola lettura
 python -m scripts.doctor --fix --apply
 ```
 
-Controlla che la migrazione applicata sia quella del repository, e poi le cose che possono
-davvero rompersi in questo dominio:
+⚠️ **La prima cosa che controlla è la migrazione**, e non è un dettaglio: una colonna che
+il codice legge e il database non ha esce come un 500 con tre schermate di stack trace, e da
+nessuna parte lì dentro c'è scritto `alembic upgrade head`. Questo comando te lo dice in una
+riga. Se l'app comincia a dare 500 subito dopo un `git pull`, lancia questo.
+
+Poi le cose che possono davvero rompersi in questo dominio:
 
 - movimenti che puntano a un conto o a una categoria che non esiste più;
 - trasferimenti senza contro-conto, o con lo stesso conto da entrambe le parti;
@@ -209,8 +215,14 @@ davvero rompersi in questo dominio:
 - categorie che sembrano doppioni ("Bar" e "bar" non possono coesistere, ma "Bar" e
   "Bar e caffè" sì, e quasi sempre sono la stessa cosa).
 
-`--fix` ripara solo quello che si può riparare senza decidere niente; il resto lo riporta e
-lo lascia stare. È il primo comando da lanciare quando un saldo non torna.
+`--fix` ripara solo quello che si può riparare **senza decidere niente**: oggi, togliere una
+categoria da un trasferimento o da una rettifica — dove la risposta giusta è una sola e non
+muove un centesimo. Un trasferimento senza contro-conto invece viene riportato e lasciato
+stare: quale conto sarebbe? Una risposta indovinata sembra una riparazione, ed è peggio del
+guasto.
+
+⚠️ **In sola lettura per default.** Anche con `--fix` è una prova a vuoto finché non
+aggiungi `--apply`.
 
 #### `prune` — toglie la spazzatura
 
@@ -247,6 +259,10 @@ python -m scripts.users --logout-all --apply              # telefono perso
 python -m scripts.users --forget tizio@example.com --apply
 ```
 
+L'elenco dice chi può entrare secondo `ALLOWED_EMAILS`, chi ha una riga a database, quando è
+entrato l'ultima volta e quante sessioni ha aperte — e segna con un ⚠️ chi ha una riga ma
+non è più fra gli indirizzi abilitati.
+
 ⚠️ **Questa tabella non decide chi può entrare**: lo decide `ALLOWED_EMAILS`, che sta nelle
 variabili d'ambiente su Vercel. Cancellare la riga non chiude niente, il prossimo magic link
 ricrea l'utente. Per chiudere davvero: prima togli l'indirizzo da `ALLOWED_EMAILS`, poi
@@ -261,9 +277,16 @@ python -m scripts.merge_categories "Bar e caffè" "Bar"
 python -m scripts.merge_categories "Bar e caffè" "Bar" --apply
 ```
 
-La prima sparisce, la seconda resta. Sposta tutti i movimenti e poi cancella. L'interfaccia
-non sa farlo: sa rinominare una categoria, ma non riconciliarne due. `doctor` è quello che ti
-suggerisce i candidati.
+La prima si svuota, la seconda resta. Sposta tutti i movimenti e poi **archivia** la prima
+invece di cancellarla: finché non hai controllato che la fusione ha fatto quello che volevi,
+quella riga è ancora l'etichetta dei movimenti che hai appena spostato. Quando non serve più,
+la toglie `prune`.
+
+Se la categoria svuotata era quella dello stipendio, il puntatore dell'household la segue —
+altrimenti il ciclo dello stipendio smetterebbe di trovare qualsiasi stipendio, in silenzio.
+
+L'interfaccia non sa farlo: sa rinominare una categoria, ma non riconciliarne due. `doctor` è
+quello che ti suggerisce i candidati.
 
 ⚠️ **Le due categorie devono avere lo stesso segno.** Fondere una categoria di entrata in una
 di uscita non è una fusione, è una perdita di dati: lo script si rifiuta.
@@ -271,13 +294,21 @@ di uscita non è una fusione, è una perdita di dati: lo script si rifiuta.
 #### `seed_demo` — dati di prova
 
 ```bash
-python -m scripts.seed_demo               # qualche mese di movimenti finti
-python -m scripts.seed_demo --reset       # svuota prima
+python -m scripts.seed_demo               # sei mesi di movimenti finti
+python -m scripts.seed_demo --months 12 --apply
 ```
 
-Serve a costruire i grafici avendo qualcosa da guardare. ⚠️ **Non lanciarlo mai contro il
-database di produzione**: mescolare movimenti finti ai tuoi è un danno che si ripara solo con
-un restore.
+Serve a costruire i grafici avendo qualcosa da guardare: stipendio il 27 di ogni mese, spese
+sparse su sei categorie, e un trasferimento al mese — che è lì apposta, perché i grafici
+devono dimostrare di ignorarlo.
+
+⚠️ **Si rifiuta di partire se c'è già un movimento a database.** Lanciato per sbaglio sui
+dati veri mescolerebbe spese inventate alle tue senza modo di distinguerle dopo: ogni totale
+sbagliato per sempre, e nessun messaggio d'errore da nessuna parte. Il controllo non è una
+comodità, è tutta la sicurezza di questo script.
+
+I numeri sono deterministici — stesso seme, stessi dati — così un grafico che ieri sembrava
+sbagliato oggi sembra sbagliato allo stesso modo.
 
 ### Il giro completo, se ti serve ripartire da zero
 

@@ -1,10 +1,13 @@
 # CLAUDE.md
 
-> Stato: **M0, M1, M2, M3 e M4 fatte — il prodotto della V1 è completo.** Si entra con un
-> magic link, ci sono conti e categorie, si registrano movimenti (uscite, entrate e
-> trasferimenti) con elenco filtrabile e riconciliazione dei saldi, e ci sono il riepilogo,
-> i grafici e l'obiettivo di risparmio. Ci sono `backup` e `restore`. Manca **M5**, che non
-> è prodotto: PWA installabile e i restanti script di manutenzione.
+> Stato: **la V1 è finita, M0 → M5.** Si entra con un magic link, ci sono conti e
+> categorie, si registrano movimenti (uscite, entrate e trasferimenti) con elenco filtrabile
+> e riconciliazione dei saldi, ci sono il riepilogo, i grafici e l'obiettivo di risparmio
+> giudicato da uno stipendio al successivo, l'app si installa sulla home, e ci sono tutti e
+> otto gli script di manutenzione.
+>
+> Il prossimo passo è la **V1.5** (import CSV, movimenti ricorrenti), poi la **V2**
+> (investimenti). Entrambe descritte nel piano.
 >
 > Questo file è la fonte di verità operativa: raccoglie le decisioni prese e, soprattutto,
 > **i motivi per cui sono state prese così**. Ormai quasi tutto quello che c'è scritto
@@ -702,8 +705,8 @@ il nome dell'household.
 | Script | A cosa serve |
 |---|---|
 | `backup` | esporta tutto in JSON. **Il più importante di tutti**, vedi sotto |
+| `doctor` | ⚠️ **prima di tutto: la migrazione applicata è quella del repository?** Poi movimenti orfani, trasferimenti rotti, importi a zero, categorie di segno sbagliato, doppioni probabili |
 | `restore` | rimette un backup. **Solo in sostituzione**, mai in fusione |
-| `doctor` | controlla migrazione, movimenti orfani, trasferimenti rotti, importi a zero, categorie di segno sbagliato, saldi che non tornano con l'ultima riconciliazione; `--fix` ripara solo quelle sicure |
 | `prune` | token e sessioni morti, categorie e conti archiviati che non usa più nessuno |
 | `reset` | svuota a livelli: `--transactions`, `--categories`, `--accounts`, `--all` |
 | `users` | chi ha accesso, e revoca delle sessioni |

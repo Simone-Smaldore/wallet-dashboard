@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router'
 
 import { BusyOverlay } from './components/BusyOverlay'
+import { OfflineBanner } from './components/OfflineBanner'
 import { ConfirmPage } from './features/auth/ConfirmPage'
 import { LoginPage } from './features/auth/LoginPage'
 import { SessionProvider, useSession } from './features/auth/session'
@@ -30,8 +31,10 @@ export function App() {
   return (
     <BrowserRouter>
       <SessionProvider>
-        {/* Outside the routes: a pending request must block whatever is shown. */}
+        {/* Outside the routes: a pending request must block whatever is shown,
+            and being offline is true of every screen at once. */}
         <BusyOverlay />
+        <OfflineBanner />
         <Routes>
           <Route path="/accedi" element={<LoginPage />} />
           <Route path="/accedi/conferma" element={<ConfirmPage />} />

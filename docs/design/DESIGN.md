@@ -178,6 +178,22 @@ Scala mobile-first:
   dello stipendio, manca il secondo stipendio. Una barra a zero sarebbe la stessa immagine
   per tutti e tre e vera per nessuno.
 
+## L'app installata (M5)
+
+- **L'icona è una banconota** — la `Banknote` di Lucide, verde accento su `--bg-app`. Non è
+  un logo e non ne inventa uno: è l'icona che l'app già usa, ingrandita. ⚠️ Non un simbolo
+  del dollaro: la V1 è **solo euro**, quindi il `$` sarebbe l'unico simbolo sbagliato da
+  metterci; una banconota dice "soldi" senza scegliere una valuta.
+- ⚠️ **La versione mascherata sta più stretta.** Android ritaglia l'icona con una forma sua
+  e solo l'80% centrale è garantito: il glifo dell'icona `maskable` è più piccolo, o gli
+  angoli della banconota si perdono.
+- **La fascia offline è ocra** (`--warn`, la stessa famiglia delle rettifiche), non rossa:
+  non è un errore, è uno stato. ⚠️ E dice **cosa comporta per te** — "quello che registri
+  adesso non viene salvato" — non solo che la rete manca. Senza la seconda metà della frase
+  uno scopre da solo, a fine mese, che la spesa non era stata salvata.
+- ⚠️ **Non offre di salvare per dopo.** L'inserimento offline è stato valutato e scartato
+  per la V1; prometterlo qui sarebbe una bugia detta dall'interfaccia.
+
 ## Tono di voce
 
 Italiano, sentence case, seconda persona informale, niente emoji. Descrive, non

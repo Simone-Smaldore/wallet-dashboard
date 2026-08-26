@@ -15,6 +15,17 @@ createRoot(container).render(
   </StrictMode>,
 )
 
-// No service worker registration here yet: the PWA is M5, and registering one
-// before there are icons and a manifest would only cache a shell that does not
-// exist.
+// ⚠️ The service worker is registered **only in production**. In development it
+// would serve yesterday's bundle and every change would look like it had not
+// been applied — half an hour lost to a bug that is not there.
+//
+// Registered after load so it never competes for bandwidth with the app itself
+// on the first visit, which is the one visit where speed is noticed.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // An app that works is worth more than an app that is installable. A
+      // failed registration must not be visible.
+    })
+  })
+}

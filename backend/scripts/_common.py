@@ -15,6 +15,15 @@ from __future__ import annotations
 import sys
 from urllib.parse import urlsplit
 
+# ⚠️ These scripts print Italian — accents, and «guillemets» around names — and
+# on Windows the default console encoding is cp1252, which turns half of that
+# into question marks. Asking for UTF-8 costs nothing on a console that already
+# speaks it and fixes the one that does not; `replace` means a stubborn terminal
+# still gets readable output instead of a crash while it is deleting rows.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 

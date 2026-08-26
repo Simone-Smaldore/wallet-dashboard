@@ -9,6 +9,18 @@
     <title>Wallet</title>
     <meta name="description" content="I tuoi conti, le tue spese, il tuo patrimonio." />
 
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+
+    <!-- ⚠️ On iOS this meta is what actually launches the app full screen; the
+         manifest's `display` alone does nothing there. And the status bar stays
+         `default`: `black-translucent` would run the page under the clock. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Wallet" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
     <!-- Substitutions declared in DESIGN.md: no font files were provided.
          Space Grotesk carries display and every number, Instrument Sans the text. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

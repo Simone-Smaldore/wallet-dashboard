@@ -546,9 +546,31 @@ Sistemata anche una divergenza lasciata da M3: `frontend/src/api/client.ts` cono
 colori di categoria e il backend dieci, quindi il selettore ne offriva sei e il colore
 assegnato dal server poteva essere uno che il form non sapeva mostrare come selezionato.
 
-**M5 — PWA e manutenzione.** Installabile e a schermo pieno, service worker per la sola shell,
-fascia "sei senza rete". Più `doctor`, `prune`, `reset`, `users`, `merge_categories`,
+**M5 — PWA e manutenzione. ✅ fatto — la V1 è chiusa.** L'app si installa sulla home e parte a
+schermo pieno, il service worker serve la sola shell, e c'è la fascia "sei senza rete". Più i
+sei script che mancavano: `doctor`, `prune`, `reset`, `users`, `merge_categories`,
 `seed_demo`.
+
+Quattro cose decise costruendo:
+
+- **L'icona è la `Banknote` di Lucide**, verde accento su nero app, rasterizzata da uno
+  script usa-e-getta (`zlib` + distanze analitiche: nessuna dipendenza nuova per quattro
+  file che non cambieranno). ⚠️ Non un simbolo del dollaro: la V1 è solo euro, quindi il `$`
+  sarebbe l'unico simbolo sbagliato da metterci sopra. E non è disegnata a mano — è l'icona
+  che l'app già usa, ingrandita, così non nascono due vocabolari grafici.
+- ⚠️ **Il service worker ignora tutto ciò che non è same-origin**, font di Google compresi.
+  Mettere in cache una risposta cross-origin significa conservarne una opaca: non si può
+  ispezionare, non si può validare, e occupa quota per una dimensione gonfiata. Senza rete
+  il font ripiega sullo stack di sistema, che è a cosa serve lo stack.
+- ⚠️ **`doctor` controlla per prima cosa la migrazione applicata**, e non era nel piano.
+  L'ho aggiunto per esperienza diretta: due volte, in questa stessa giornata, una colonna che
+  il codice leggeva e il database non aveva è uscita come un 500 con tre schermate di stack
+  trace, e da nessuna parte lì dentro c'era scritto `alembic upgrade head`.
+- **`merge_categories` archivia invece di cancellare** la categoria svuotata, e sposta con
+  sé il puntatore dello stipendio dell'household. Cancellare subito toglierebbe l'etichetta
+  ai movimenti appena spostati, proprio mentre stai controllando che la fusione sia andata
+  bene; `prune` la toglie dopo. E se lo stipendio puntasse alla categoria svuotata, il ciclo
+  smetterebbe di trovare qualsiasi stipendio senza dire niente.
 
 **V1.5 — Import e ricorrenti.** Import CSV dell'estratto conto con mappatura delle colonne,
 riconoscimento dei duplicati e stato "da confermare"; movimenti ricorrenti (stipendio, affitto,
