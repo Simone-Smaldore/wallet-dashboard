@@ -81,7 +81,14 @@ class LoginTokenState:
     def check(self, now: datetime | None = None) -> None:
         moment = now or utcnow()
         if self.used_at is not None:
-            raise InvalidToken("Il link è già stato usato")
+            # ⚠️ The message says what to do, not just what went wrong.
+            # "Already used" almost always means it was opened in a browser
+            # while the app was waiting for it — and without that sentence the
+            # next attempt is the same attempt.
+            raise InvalidToken(
+                "Questo link è già stato usato. Se hai l'app installata, "
+                "chiedine un altro e copialo invece di aprirlo."
+            )
         if is_expired(self.expires_at, moment):
             raise InvalidToken("Il link è scaduto")
 
