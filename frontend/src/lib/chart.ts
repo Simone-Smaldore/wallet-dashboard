@@ -57,3 +57,14 @@ export const axisProps = {
  *  see components/charts/MoneyTooltip.tsx — rather than a pile of inline
  *  styles bolted onto the library's default. */
 export const CURSOR = { fill: 'var(--color-surface-hover)' } as const
+
+/** How many ticks to skip on a month axis.
+ *
+ * ⚠️ Recharts draws every tick it is given, so a five-year window becomes sixty
+ * labels overlapping into a grey smear on a phone. Roughly a dozen is what fits
+ * and what a reader can actually use: the axis is there to locate a point in
+ * time, not to enumerate the months.
+ */
+export function tickInterval(points: number): number {
+  return points <= 14 ? 0 : Math.ceil(points / 12) - 1
+}

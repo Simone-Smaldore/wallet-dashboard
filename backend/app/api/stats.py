@@ -38,6 +38,7 @@ from app.schemas.stats import (
     PaceOut,
     CalendarOut,
     PeriodOut,
+    SeriesOut,
     SavingsOut,
     SummaryOut,
     TotalsOut,
@@ -45,10 +46,10 @@ from app.schemas.stats import (
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])
 
-#: How far back the long charts look. A year is the span that makes seasonality
-#: visible — the holidays, the insurance premium — without turning a line into a
-#: hedge of unreadable points on a phone.
-MONTHS_BACK = 12
+#: What `/series` looks back by default. A year is the span that makes
+#: seasonality visible — the holidays, the insurance premium — and it is only a
+#: default: the screen offers 6 months to Max.
+DEFAULT_MONTHS = 12
 
 #: What an uncategorised spend is called on screen. Computed here rather than in
 #: a component so the two charts that can show it cannot disagree.
@@ -137,6 +138,54 @@ def _cycle_out(cycle: domain.SalaryCycle | None) -> CycleOut | None:
     )
 
 
+@router.get("/series", response_model=SeriesOut)
+def series(
+    user: CurrentUserDep,
+    db: DbDep,
+    months: int = Query(default=DEFAULT_MONTHS, ge=0, le=600),
+    end: date | None = Query(default=None),
+) -> SeriesOut:
+    """Income, spending and net worth month by month, over a window you choose.
+
+    `months` is how far back to look, counting the month `end` falls in.
+    ⚠️ **Zero means "everything"** — from the month of the first movement — which
+    is the honest reading of a "Max" button: not an arbitrary large number, but
+    the point where the data actually starts.
+
+    Separate from `/analysis` on purpose: widening a line from one year to five
+    must not re-fetch a pie, and changing the month must not re-fetch five years
+    of history.
+    """
+    last_month = month_of(end or date.today()).start
+    movements = movement_rows(db, user.household_id)
+
+    if months == 0:
+        earliest = min((row.date for row in movements), default=last_month)
+        first_month = month_of(earliest).start
+    else:
+        first_month = shift_month(last_month, -(months - 1))
+
+    span = months_between(first_month, month_of(last_month).end)
+    accounts = _accounts(db, user.household_id)
+
+    monthly = domain.monthly_series(movements, span)
+    worth = domain.net_worth_series(balance_rows(accounts), movements, span)
+
+    return SeriesOut(
+        months=[
+            MonthPointOut(
+                month=point.month,
+                income_cents=point.income_cents,
+                expense_cents=point.expense_cents,
+                savings_cents=point.savings_cents,
+                net_worth_cents=value.value_cents,
+                movement_count=point.movement_count,
+            )
+            for point, value in zip(monthly, worth, strict=True)
+        ]
+    )
+
+
 @router.get("/calendar", response_model=CalendarOut)
 def calendar(user: CurrentUserDep, db: DbDep) -> CalendarOut:
     """Which months actually have something in them.
@@ -176,17 +225,10 @@ def analysis(
     period = _requested_period(date_from, date_to)
     previous = previous_period(period)
 
-    accounts = _accounts(db, user.household_id)
-    rows = balance_rows(accounts)
     movements = movement_rows(db, user.household_id)
 
     slices = domain.by_category(movements, period, previous=previous)
     names = _category_labels(db, user.household_id)
-
-    first_month = shift_month(period.end.replace(day=1), -(MONTHS_BACK - 1))
-    months = months_between(first_month, period.end)
-    monthly = domain.monthly_series(movements, months)
-    worth = domain.net_worth_series(rows, movements, months)
 
     biggest = domain.top_expenses(movements, period)
 
@@ -196,17 +238,6 @@ def analysis(
         totals=_totals_out(domain.totals(movements, period)),
         previous_totals=_totals_out(domain.totals(movements, previous)),
         by_category=[_slice_out(row, names) for row in slices],
-        months=[
-            MonthPointOut(
-                month=point.month,
-                income_cents=point.income_cents,
-                expense_cents=point.expense_cents,
-                savings_cents=point.savings_cents,
-                net_worth_cents=value.value_cents,
-                movement_count=point.movement_count,
-            )
-            for point, value in zip(monthly, worth, strict=True)
-        ],
         # ⚠️ The domain chose *which* rows; this only fetches them whole. A
         # WHERE clause repeating "expense and not an adjustment" would be a
         # second definition of spending, living where nobody would test it.

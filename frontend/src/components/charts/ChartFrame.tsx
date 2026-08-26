@@ -24,9 +24,12 @@ export function ChartFrame({
 }) {
   return (
     <section className="rounded-card border border-border-soft bg-surface-card p-4 shadow-card sm:p-5">
-      <header className="flex items-baseline justify-between gap-3">
+      {/* Wraps: the aside can be five buttons, and on 390px they do not fit
+          beside a title of five words. Better a second line than a squeezed
+          one. */}
+      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
         <h2 className="font-display text-heading text-ink-1">{title}</h2>
-        {aside ? <div className="shrink-0 text-caption text-ink-2">{aside}</div> : null}
+        {aside ? <div className="text-caption text-ink-2">{aside}</div> : null}
       </header>
 
       {empty ? (

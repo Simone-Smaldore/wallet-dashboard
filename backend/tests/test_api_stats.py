@@ -252,13 +252,26 @@ def test_a_spend_with_no_category_is_named_rather_than_dropped(setup):
     assert slices[0]["color"] is None
 
 
-def test_the_long_charts_carry_twelve_months_ending_with_this_one(setup):
+def test_the_analysis_is_about_the_period_and_nothing_else(setup):
+    """⚠️ The long series lives on /series, not here.
+
+    They answer different questions over different windows — this one breaks
+    down a month, that one draws five years — so widening a line must not
+    re-fetch a pie, and changing the month must not re-fetch five years of
+    history.
+    """
     body = setup["client"].get("/api/stats/analysis").json()
 
-    assert len(body["months"]) == 12
-    assert body["months"][-1]["month"] == FIRST.isoformat()
-    # Net worth is on the same array: one request, two charts.
-    assert body["months"][-1]["net_worth_cents"] == 600_000
+    assert "months" not in body
+    assert set(body) == {
+        "period",
+        "previous",
+        "totals",
+        "previous_totals",
+        "by_category",
+        "top_expenses",
+        "pace",
+    }
 
 
 def test_the_biggest_spends_come_back_whole(setup):
@@ -286,3 +299,65 @@ def test_the_ends_of_a_range_can_arrive_the_wrong_way_round(setup):
     body = setup["client"].get("/api/stats/analysis?from=2026-03-15&to=2026-03-09").json()
 
     assert body["period"] == {"start": "2026-03-09", "end": "2026-03-15"}
+
+
+# --------------------------------------------------------------------------
+# The long charts, over a window you pick
+# --------------------------------------------------------------------------
+
+
+def test_the_series_defaults_to_twelve_months_ending_now(setup):
+    body = setup["client"].get("/api/stats/series").json()
+
+    assert len(body["months"]) == 12
+    assert body["months"][-1]["month"] == FIRST.isoformat()
+
+
+def test_the_series_window_is_chosen_by_the_caller(setup):
+    """Widening a line must not mean re-fetching a pie: that is why this is its
+    own endpoint."""
+    for months in (6, 36, 60):
+        body = setup["client"].get(f"/api/stats/series?months={months}").json()
+        assert len(body["months"]) == months
+
+
+def test_zero_months_means_everything_there_is(setup):
+    """⚠️ "Max" is not an arbitrarily large number: it is where the data starts.
+    Asking for 600 months would draw fifty years of zeros in front of a life
+    that began four months ago."""
+    old = (FIRST - timedelta(days=70)).replace(day=1)
+    record(setup, amount_cents=5_000, date=old.isoformat())
+
+    body = setup["client"].get("/api/stats/series?months=0").json()
+
+    assert body["months"][0]["month"] == old.isoformat()
+    assert body["months"][-1]["month"] == FIRST.isoformat()
+
+
+def test_with_no_movements_at_all_max_is_this_month_alone(setup):
+    """No data means no history to draw, not a crash and not an empty array the
+    chart would have to special-case."""
+    body = setup["client"].get("/api/stats/series?months=0").json()
+
+    assert [point["month"] for point in body["months"]] == [FIRST.isoformat()]
+
+
+def test_a_transfer_is_absent_from_the_series_too(setup):
+    """⚠️ The untouchable rule, on this endpoint as well."""
+    record(
+        setup,
+        kind="transfer",
+        amount_cents=180_000,
+        category_id=None,
+        counter_account_id=setup["deposito"]["id"],
+    )
+
+    body = setup["client"].get("/api/stats/series?months=1").json()
+    point = body["months"][-1]
+
+    assert (point["income_cents"], point["expense_cents"]) == (0, 0)
+    assert point["net_worth_cents"] == 600_000
+
+
+def test_the_series_needs_a_session(client):
+    assert client.get("/api/stats/series").status_code == 401

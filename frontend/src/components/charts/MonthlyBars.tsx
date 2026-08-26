@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 
 import type { MonthPoint } from '../../api/client'
-import { AXIS, CURSOR, GRID, MONEY, axisProps } from '../../lib/chart'
+import { AXIS, CURSOR, GRID, MONEY, axisProps, tickInterval } from '../../lib/chart'
 import { formatMoneyShort } from '../../lib/money'
 import { monthTick } from '../../lib/period'
 import { MoneyTooltip } from './MoneyTooltip'
@@ -46,7 +46,12 @@ export function MonthlyBars({
         }}
       >
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="month" tickFormatter={monthTick} {...axisProps} />
+        <XAxis
+          dataKey="month"
+          tickFormatter={monthTick}
+          interval={tickInterval(months.length)}
+          {...axisProps}
+        />
         <YAxis tickFormatter={formatMoneyShort} width={64} {...axisProps} />
         <Tooltip cursor={CURSOR} content={<MoneyTooltip />} />
 

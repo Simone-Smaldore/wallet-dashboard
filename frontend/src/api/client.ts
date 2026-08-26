@@ -476,6 +476,14 @@ export const api = {
    *  only the periods there is something to look at. */
   calendar: () => request<{ months: string[] }>('/api/stats/calendar'),
 
+  /** The long charts, over a window of your choosing.
+   *
+   * ⚠️ Apart from `analysis` on purpose: widening a line from one year to five
+   * must not re-fetch a pie, and changing the month must not re-fetch five
+   * years of history. `months: 0` means everything there is. */
+  series: (range: { months: number; end?: string }) =>
+    request<{ months: MonthPoint[] }>(`/api/stats/series${toQuery(range)}`),
+
   /* ---- Household: the settings that belong to the money ---- */
 
   household: () => request<Household>('/api/household'),

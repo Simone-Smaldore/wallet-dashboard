@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { useQuery } from '../../api/cache'
-import { api, type Analysis, type CategorySlice } from '../../api/client'
+import { api, type Analysis, type CategorySlice, type MonthPoint } from '../../api/client'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Dropdown } from '../../components/Dropdown'
@@ -16,6 +16,7 @@ import { CategoryPie } from '../../components/charts/CategoryPie'
 import { ChartFrame } from '../../components/charts/ChartFrame'
 import { MonthlyBars } from '../../components/charts/MonthlyBars'
 import { NetWorthArea } from '../../components/charts/NetWorthArea'
+import { RangePicker } from '../../components/charts/RangePicker'
 import { formatMoney, formatSigned } from '../../lib/money'
 import {
   alignedSpan,
@@ -97,10 +98,19 @@ export function AnalisiPage() {
     grain === 'custom' ? custom : start === null ? null : alignedSpan(start, SPAN[grain])
 
   const key = period && `/api/stats/analysis?from=${period.start}&to=${period.end}`
-  const { data, loading, error, refetch } = useQuery(key, () =>
-    period
-      ? api.analysis({ from: period.start, to: period.end })
-      : Promise.reject(new Error('nessun periodo')),
+  const { data, loading, error, refetch } = useQuery(
+    key,
+    () =>
+      period
+        ? api.analysis({ from: period.start, to: period.end })
+        : Promise.reject(new Error('nessun periodo')),
+    // ⚠️ The one read in the app that blocks the page, and only when it has
+    // nothing to show. Everything here is a single answer to a single question
+    // — seven charts over one period — so there is no half of it to draw while
+    // the rest arrives, and it is the heaviest query the app makes. Better to
+    // say "attendi" than to leave the screen blank and look broken. Coming back
+    // to a period already loaded does not block: the data on screen is right.
+    { blocking: true },
   )
 
   const at = start === null ? -1 : available.indexOf(start)
@@ -250,6 +260,30 @@ function periodGroups(starts: string[], size: number): Group<string>[] {
     .map(([year, options]) => ({ label: String(year), options }))
 }
 
+/** One long chart's own window.
+ *
+ * ⚠️ One of these per chart, not one for both. The two answer different
+ * questions and want different spans: "am I spending more than I earn" is read
+ * over months, "is my money growing" over years, and forcing them to agree
+ * means one of the two is always shown at the wrong length. They cost one small
+ * request each, cached per window, so the second visit to a span is instant.
+ */
+function useSeries(end: string, initial: number) {
+  const [range, setRange] = useState(initial)
+
+  const { data } = useQuery(`/api/stats/series?months=${range}&end=${end}`, () =>
+    api.series({ months: range, end }),
+  )
+
+  // ⚠️ Keep the last window drawn while a wider one loads. Blanking a chart to
+  // redraw the same shape one year longer reads as a fault; leaving it up and
+  // letting it grow reads as what it is.
+  const drawn = useRef<MonthPoint[]>([])
+  if (data) drawn.current = data.months
+
+  return { months: data?.months ?? drawn.current, range, setRange }
+}
+
 function Charts({
   analysis,
   onOpenMovement,
@@ -258,6 +292,11 @@ function Charts({
   onOpenMovement: (movement: Analysis['top_expenses'][number]) => void
 }) {
   const navigate = useNavigate()
+
+  // The trailing windows end where the chosen period ends, so stepping back a
+  // month walks both trends back with it.
+  const flows = useSeries(analysis.period.end, 12)
+  const worth = useSeries(analysis.period.end, 12)
   const { period, totals, previous_totals: before, pace } = analysis
   const nothing = totals.movement_count === 0
 
@@ -336,12 +375,15 @@ function Charts({
 
       <ChartFrame
         title="Entrate e uscite, mese per mese"
-        aside="ultimi 12 mesi"
-        empty={analysis.months.every((month) => month.movement_count === 0)}
-        emptyText="Nessun movimento negli ultimi dodici mesi."
+        aside={<RangePicker value={flows.range} onChange={flows.setRange} />}
+        empty={
+          flows.months.length === 0 ||
+          flows.months.every((month) => month.movement_count === 0)
+        }
+        emptyText="Nessun movimento in questa finestra."
       >
         <MonthlyBars
-          months={analysis.months}
+          months={flows.months}
           onSelect={(month) => {
             const span = monthOf(month)
             void navigate(`/movimenti?from=${span.start}&to=${span.end}`)
@@ -349,8 +391,12 @@ function Charts({
         />
       </ChartFrame>
 
-      <ChartFrame title="Patrimonio a fine mese" aside="ultimi 12 mesi" empty={false}>
-        <NetWorthArea months={analysis.months} />
+      <ChartFrame
+        title="Patrimonio a fine mese"
+        aside={<RangePicker value={worth.range} onChange={worth.setRange} />}
+        empty={worth.months.length === 0}
+      >
+        <NetWorthArea months={worth.months} />
       </ChartFrame>
 
       <ChartFrame

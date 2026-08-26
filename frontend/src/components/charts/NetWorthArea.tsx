@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 
 import type { MonthPoint } from '../../api/client'
-import { CURSOR, GRID, axisProps } from '../../lib/chart'
+import { CURSOR, GRID, axisProps, tickInterval } from '../../lib/chart'
 import { formatMoneyShort } from '../../lib/money'
 import { monthTick } from '../../lib/period'
 import { MoneyTooltip } from './MoneyTooltip'
@@ -39,7 +39,12 @@ export function NetWorthArea({ months }: { months: MonthPoint[] }) {
         </defs>
 
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="month" tickFormatter={monthTick} {...axisProps} />
+        <XAxis
+          dataKey="month"
+          tickFormatter={monthTick}
+          interval={tickInterval(months.length)}
+          {...axisProps}
+        />
         <YAxis
           tickFormatter={formatMoneyShort}
           width={64}

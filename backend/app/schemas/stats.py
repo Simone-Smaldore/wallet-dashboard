@@ -116,6 +116,19 @@ class SavingsOut(BaseModel):
     allowance_cents: int | None
 
 
+class SeriesOut(BaseModel):
+    """The long charts, over a window you choose.
+
+    ⚠️ Its own endpoint, and not part of the analysis response, because it
+    answers a different question over a different window: the period selector
+    picks *what to break down*, this picks *how far back to look*. Tying them
+    together would mean re-fetching seven charts to widen a line, and re-fetching
+    a line to change the month.
+    """
+
+    months: list[MonthPointOut]
+
+
 class CalendarOut(BaseModel):
     """The months that have at least one movement, oldest first.
 
@@ -147,8 +160,5 @@ class AnalysisOut(BaseModel):
     totals: TotalsOut
     previous_totals: TotalsOut
     by_category: list[CategorySliceOut]
-    #: The last twelve months ending with the one the period ends in. Two charts
-    #: read this array: income/spending/difference, and net worth.
-    months: list[MonthPointOut]
     top_expenses: list[TransactionOut]
     pace: PaceOut

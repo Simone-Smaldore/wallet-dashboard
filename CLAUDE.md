@@ -433,6 +433,18 @@ con totale e ultimi movimenti, uscite per categoria nel periodo (anello + elenco
 entrate/uscite/differenza mese per mese, patrimonio a fine mese, confronto col periodo
 precedente, le cinque uscite più grandi, spesa media giornaliera con proiezione a fine mese.
 
+⚠️ **La finestra dei grafici lunghi è una cosa diversa dal periodo.** Il selettore in cima
+sceglie *cosa scomporre* — le categorie di marzo, il trimestre; le pillole 6M/1A/3A/5A/Max
+scelgono *quanto indietro guarda l'andamento*, e una tendenza non è un periodo. Per questo
+stanno su due endpoint (`GET /api/stats/series`, con `months=0` che significa "da quando
+esistono dati"): allargare una linea non deve ricaricare una torta, e cambiare mese non deve
+ricaricare cinque anni di storia.
+
+⚠️ **E ogni grafico lungo ha la sua finestra, non una condivisa.** I due rispondono a
+domande diverse e vogliono lunghezze diverse — "sto spendendo più di quanto guadagno" si
+legge su qualche mese, "il patrimonio sta crescendo" su qualche anno — e obbligarli ad
+andare d'accordo vuol dire mostrarne sempre uno alla lunghezza sbagliata.
+
 ⚠️ **I periodi dell'analisi sono solari e sono solo quelli che hanno dati.** L'anno è
 gennaio–dicembre e il trimestre è uno dei quattro fissi, non "gli ultimi dodici o tre mesi":
 una finestra mobile vuol dire una cosa diversa ogni volta che la apri, e due letture a una

@@ -25,6 +25,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { busyWhile } from './busy'
+
 interface Entry {
   data: unknown
   storedAt: number
@@ -226,9 +228,10 @@ export interface QueryState<T> {
 export function useQuery<T>(
   key: string | null,
   fetcher: () => Promise<T>,
-  options: { staleMs?: number } = {},
+  options: { staleMs?: number; blocking?: boolean } = {},
 ): QueryState<T> {
   const staleMs = staleFor(key ?? '', options.staleMs)
+  const { blocking = false } = options
 
   const cached = key ? (entries.get(key) as Entry | undefined) : undefined
   const [data, setData] = useState<T | undefined>(cached?.data as T | undefined)
@@ -251,8 +254,16 @@ export function useQuery<T>(
 
       let cancelled = false
 
-      fetcherRef
-        .current()
+      // ⚠️ The overlay, when a screen asks for it, and **only on a first load**.
+      // A read that has nothing to show yet leaves a blank page, and there the
+      // scrim is the honest thing: it says the app is working. A background
+      // revalidate has correct data already on screen, and blocking the page
+      // over it would undo the whole point of the cache — the rule this file
+      // has always had, now that a read can block at all.
+      const load = () =>
+        blocking && !hasData ? busyWhile(() => fetcherRef.current()) : fetcherRef.current()
+
+      load()
         .then((result) => {
           entries.set(currentKey, { data: result, storedAt: Date.now() })
           toDisk(currentKey, result)
