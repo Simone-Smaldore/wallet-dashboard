@@ -440,6 +440,18 @@ stanno su due endpoint (`GET /api/stats/series`, con `months=0` che significa "d
 esistono dati"): allargare una linea non deve ricaricare una torta, e cambiare mese non deve
 ricaricare cinque anni di storia.
 
+⚠️ **La curva del patrimonio si valuta col prezzo che esisteva allora**, mai con l'ultimo
+applicato all'indietro: quello ridisegnerebbe marzo col mercato di agosto, ed è la ragione
+per cui le valutazioni sono istantanee datate e non un campo sovrascritto. I mesi precedenti
+al primo prezzo mostrano il **capitale versato**, che è un'altra grandezza — quindi il primo
+mese con prezzo fa un gradino pari a tutto il guadagno accumulato in silenzio, e la
+schermata lo deve dire (`priced_from`), altrimenti si legge come un mese eccezionale.
+
+⚠️ **E la curva ha un selettore su cosa disegna**: patrimonio totale, solo liquido, o un
+conto per volta. Sono tre filtri sullo stesso calcolo — `net_worth_series` riceve la lista
+di conti e non sa quale delle tre domande le stai facendo — perché tre funzioni diverse
+diventerebbero prima o poi tre definizioni diverse di patrimonio.
+
 ⚠️ **E ogni grafico lungo ha la sua finestra, non una condivisa.** I due rispondono a
 domande diverse e vogliono lunghezze diverse — "sto spendendo più di quanto guadagno" si
 legge su qualche mese, "il patrimonio sta crescendo" su qualche anno — e obbligarli ad

@@ -3,7 +3,13 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router'
 
 import { useQuery } from '../../api/cache'
-import { api, type Analysis, type CategorySlice, type MonthPoint } from '../../api/client'
+import {
+  api,
+  type Account,
+  type Analysis,
+  type CategorySlice,
+  type MonthPoint,
+} from '../../api/client'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { Dropdown } from '../../components/Dropdown'
@@ -18,6 +24,7 @@ import { MonthlyBars } from '../../components/charts/MonthlyBars'
 import { NetWorthArea } from '../../components/charts/NetWorthArea'
 import { RangePicker } from '../../components/charts/RangePicker'
 import { formatMoney, formatSigned } from '../../lib/money'
+import { formatDayShort } from '../../lib/period'
 import {
   alignedSpan,
   monthAbbr,
@@ -234,6 +241,32 @@ export function AnalisiPage() {
  *
  * Labels are short on purpose — `gennaio`, `gen–mar`, `2026` — because the year
  * is already the group heading and repeating it in every row is noise. */
+/** ⚠️ "Tutto" and "Solo liquido" first, then the accounts.
+ *
+ * The two summaries answer the question people actually ask — how much do I
+ * have, and how much of it could I spend — and a single account is the follow
+ * up. Putting the accounts first would bury both. */
+function scopeGroups(accounts: Account[]): Group<Scope>[] {
+  const open = accounts.filter((account) => !account.is_archived)
+
+  return [
+    {
+      label: 'Tutto',
+      options: [
+        { value: 'all' as Scope, label: 'Patrimonio totale' },
+        { value: 'liquid' as Scope, label: 'Solo liquido' },
+      ],
+    },
+    {
+      label: 'Un conto',
+      options: open.map((account) => ({
+        value: account.id as Scope,
+        label: account.name,
+      })),
+    },
+  ]
+}
+
 function periodGroups(starts: string[], size: number): Group<string>[] {
   if (size === 12) {
     return [
@@ -268,12 +301,14 @@ function periodGroups(starts: string[], size: number): Group<string>[] {
  * means one of the two is always shown at the wrong length. They cost one small
  * request each, cached per window, so the second visit to a span is instant.
  */
-function useSeries(end: string, initial: number) {
+function useSeries(end: string, initial: number, scope: Scope = 'all') {
   const [range, setRange] = useState(initial)
 
-  const { data } = useQuery(`/api/stats/series?months=${range}&end=${end}`, () =>
-    api.series({ months: range, end }),
-  )
+  const where =
+    scope === 'all' ? {} : scope === 'liquid' ? { liquid: true } : { account_id: scope }
+  const key = `/api/stats/series?months=${range}&end=${end}&scope=${scope}`
+
+  const { data } = useQuery(key, () => api.series({ months: range, end, ...where }))
 
   // ⚠️ Keep the last window drawn while a wider one loads. Blanking a chart to
   // redraw the same shape one year longer reads as a fault; leaving it up and
@@ -281,8 +316,17 @@ function useSeries(end: string, initial: number) {
   const drawn = useRef<MonthPoint[]>([])
   if (data) drawn.current = data.months
 
-  return { months: data?.months ?? drawn.current, range, setRange }
+  return {
+    months: data?.months ?? drawn.current,
+    pricedFrom: data?.priced_from ?? null,
+    range,
+    setRange,
+  }
 }
+
+/** What the net-worth curve is drawing: everything, only what is spendable, or
+ *  one account on its own. */
+type Scope = 'all' | 'liquid' | number
 
 function Charts({
   analysis,
@@ -295,8 +339,11 @@ function Charts({
 
   // The trailing windows end where the chosen period ends, so stepping back a
   // month walks both trends back with it.
+  const [scope, setScope] = useState<Scope>('all')
+  const accounts = useQuery('/api/accounts', api.accounts)
+
   const flows = useSeries(analysis.period.end, 12)
-  const worth = useSeries(analysis.period.end, 12)
+  const worth = useSeries(analysis.period.end, 12, scope)
   const { period, totals, previous_totals: before, pace } = analysis
   const nothing = totals.movement_count === 0
 
@@ -396,7 +443,31 @@ function Charts({
         aside={<RangePicker value={worth.range} onChange={worth.setRange} />}
         empty={worth.months.length === 0}
       >
+        <div className="mb-3 max-w-[260px]">
+          <Dropdown
+            placeholder="Cosa mostrare"
+            value={typeof scope === 'number' ? scope : scope}
+            onChange={(value) => setScope((value ?? 'all') as Scope)}
+            groups={scopeGroups(accounts.data?.accounts ?? [])}
+          />
+        </div>
+
         <NetWorthArea months={worth.months} />
+
+        {/* ⚠️ Where the prices begin, said out loud. Before that day the curve
+            draws the capital paid in, which is a different quantity — so the
+            first priced month steps up by everything the holdings had gained in
+            silence, and without this line that step reads as a very good
+            month. */}
+        {worth.pricedFrom && worth.months.length > 0 &&
+        worth.months[0].month < worth.pricedFrom &&
+        scope !== 'liquid' ? (
+          <p className="mt-3 text-caption text-ink-3">
+            Prima del {formatDayShort(worth.pricedFrom)} non avevo i prezzi: lì la curva
+            mostra quanto avevi versato, non quanto valeva. Il gradino è il guadagno
+            accumulato fino a quel giorno, non quello di un mese.
+          </p>
+        ) : null}
       </ChartFrame>
 
       <ChartFrame

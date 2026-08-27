@@ -44,7 +44,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date as Date
 
-from app.domain.balances import AccountRow, MovementRow, net_worth
+from app.domain.balances import AccountRow, MovementRow, balances
 from app.domain.period import Period, month_of, shift_month
 from app.domain.vocabulary import TransactionKind
 
@@ -362,28 +362,56 @@ def net_worth_series(
     accounts: Iterable[AccountRow],
     movements: Iterable[MovementRow],
     months: Sequence[Date],
+    *,
+    valuations: dict[int, Sequence[tuple[Date, int]]] | None = None,
 ) -> list[NetWorthPoint]:
-    """What everything was worth at the end of each month.
+    """What the given accounts were worth at the end of each month.
 
-    ⚠️ Computed by calling `balances.net_worth` with `as_of` set to the last day
-    of the month, not by accumulating the series as it goes. Accumulating would
-    be a second definition of net worth, and the first time the two disagree —
-    an account opened mid-history, a movement dated before its own account —
-    there would be no way to tell which one is lying.
+    Pass every account for the net worth, one account for its own curve, or the
+    non-investment ones for the liquid line: the filtering is the caller's, the
+    arithmetic is here.
 
-    The cost is one pass over the movements per month. Twelve passes over a few
-    thousand rows is nothing, and it buys a number that is right by construction.
+    ⚠️ **Each month uses the valuation that existed *then*, never the latest
+    one.** Applying today's price backwards would redraw last March with August's
+    market and the curve would be a retroactive lie — the exact reason valuations
+    are dated snapshots instead of a field that gets overwritten.
+
+    ⚠️ A month **before** the first price falls back to the capital paid in.
+    That is honest but it is not the same quantity, so the first priced month
+    steps up by however much the holding had gained in silence. The screen has
+    to say where the prices begin, or that step reads as a very good month.
     """
     rows = list(accounts)
     history = list(movements)
+    priced = valuations or {}
 
-    return [
-        NetWorthPoint(
-            month=month,
-            value_cents=net_worth(rows, history, as_of=month_of(month).end),
-        )
-        for month in months
-    ]
+    points = []
+    for month in months:
+        end = month_of(month).end
+        total = 0
+        for account in rows:
+            if not account.include_in_net_worth:
+                continue
+            balance = balances([account], history, as_of=end).get(
+                account.id, account.opening_balance_cents
+            )
+            total += _valued_at(priced.get(account.id), end, balance)
+        points.append(NetWorthPoint(month=month, value_cents=total))
+    return points
+
+
+def _valued_at(
+    valuations: Sequence[tuple[Date, int]] | None, on: Date, fallback: int
+) -> int:
+    """The newest valuation not later than `on`, or the capital paid in."""
+    if not valuations:
+        return fallback
+
+    best = None
+    for when, value in valuations:
+        if when <= on and (best is None or when > best[0]):
+            best = (when, value)
+    return best[1] if best else fallback
 
 
 def top_expenses(

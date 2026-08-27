@@ -578,3 +578,71 @@ def test_a_transfer_between_two_ordinary_accounts_is_still_nothing():
     movements = [salary(200_000, when=date(2026, 8, 27)), transfer(70_000, when=date(2026, 9, 6))]
 
     assert with_investments(movements).set_aside_cents == 0
+
+
+# --------------------------------------------------------------------------
+# The net-worth curve, once investments have a market price
+# --------------------------------------------------------------------------
+
+ETF = AccountRow(id=9, opening_balance_cents=0, is_investment=True)
+
+
+def test_a_month_uses_the_price_that_existed_then():
+    """⚠️ Never the latest one applied backwards.
+
+    That would redraw last March with August's market, and the curve you look
+    at would never have been true. It is the whole reason valuations are dated
+    snapshots and not a field that gets overwritten.
+    """
+    movements = [
+        MovementRow(
+            kind=TransactionKind.TRANSFER,
+            amount_cents=100_000,
+            account_id=1,
+            counter_account_id=9,
+            date=date(2026, 1, 10),
+        )
+    ]
+    prices = {9: [(date(2026, 2, 28), 110_000), (date(2026, 3, 31), 130_000)]}
+
+    series = stats.net_worth_series(
+        [CORRENTE, ETF],
+        movements,
+        [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)],
+        valuations=prices,
+    )
+
+    # January has no price yet: the capital paid in, which is the honest answer.
+    assert series[0].value_cents == 100_000 - 100_000 + 100_000
+    # February and March take theirs, each its own.
+    assert series[1].value_cents == 0 + 110_000
+    assert series[2].value_cents == 0 + 130_000
+
+
+def test_a_price_from_after_the_month_is_not_used_for_it():
+    """The one that would smear today over the whole year."""
+    movements = [
+        MovementRow(
+            kind=TransactionKind.TRANSFER,
+            amount_cents=100_000,
+            account_id=1,
+            counter_account_id=9,
+            date=date(2026, 1, 10),
+        )
+    ]
+
+    series = stats.net_worth_series(
+        [ETF], movements, [date(2026, 1, 1)], valuations={9: [(date(2026, 8, 26), 500_000)]}
+    )
+
+    assert series[0].value_cents == 100_000
+
+
+def test_one_account_at_a_time_is_the_same_function():
+    """The per-account curve is the net worth of a list of one: the filtering is
+    the caller's job, the arithmetic is not duplicated."""
+    movements = [expense(20_000, when=date(2026, 3, 4))]
+
+    series = stats.net_worth_series([CORRENTE], movements, [date(2026, 3, 1)])
+
+    assert series[0].value_cents == 100_000 - 20_000

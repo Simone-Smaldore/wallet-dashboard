@@ -562,8 +562,17 @@ export const api = {
    * ⚠️ Apart from `analysis` on purpose: widening a line from one year to five
    * must not re-fetch a pie, and changing the month must not re-fetch five
    * years of history. `months: 0` means everything there is. */
-  series: (range: { months: number; end?: string }) =>
-    request<{ months: MonthPoint[] }>(`/api/stats/series${toQuery(range)}`),
+  /** `account_id` draws one account's curve, `liquid` leaves the investments
+   *  out. Neither changes the arithmetic — they decide which accounts go in. */
+  series: (range: {
+    months: number
+    end?: string
+    account_id?: number
+    liquid?: boolean
+  }) =>
+    request<{ months: MonthPoint[]; priced_from: string | null }>(
+      `/api/stats/series${toQuery(range)}`,
+    ),
 
   /* ---- Investments ---- */
 

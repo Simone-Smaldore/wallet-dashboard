@@ -135,6 +135,11 @@ class SeriesOut(BaseModel):
     """
 
     months: list[MonthPointOut]
+    #: ⚠️ The first day any holding had a market price. Months before it are
+    #: drawn at the capital paid in, which is a different quantity — so the
+    #: first priced month steps up by whatever had been gained in silence, and
+    #: the screen has to say so or it reads as a very good month.
+    priced_from: DateType | None = None
 
 
 class CalendarOut(BaseModel):

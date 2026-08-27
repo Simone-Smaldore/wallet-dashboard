@@ -29,7 +29,7 @@ from app.domain.period import (
     previous_period,
     shift_month,
 )
-from app.models import Account, Category, Household, Transaction
+from app.models import Account, Asset, AssetValuation, Category, Household, Transaction
 from app.schemas.account import AccountOut
 from app.schemas.stats import (
     AnalysisOut,
@@ -179,6 +179,8 @@ def series(
     db: DbDep,
     months: int = Query(default=DEFAULT_MONTHS, ge=0, le=600),
     end: date | None = Query(default=None),
+    account_id: int | None = Query(default=None),
+    liquid: bool = Query(default=False),
 ) -> SeriesOut:
     """Income, spending and net worth month by month, over a window you choose.
 
@@ -186,6 +188,17 @@ def series(
     ⚠️ **Zero means "everything"** — from the month of the first movement — which
     is the honest reading of a "Max" button: not an arbitrary large number, but
     the point where the data actually starts.
+
+    `account_id` draws one account's own curve; `liquid` leaves the investments
+    out and shows only what could be spent. Neither changes the arithmetic —
+    both just decide which accounts go in, which is why there is one function
+    behind all three.
+
+    ⚠️ **Every month is valued with the price that existed then.** Applying
+    today's price backwards would redraw last March with August's market. Months
+    before the first price fall back to the capital paid in, and `priced_from`
+    says where that line is: without it, the first priced month looks like an
+    extraordinary gain.
 
     Separate from `/analysis` on purpose: widening a line from one year to five
     must not re-fetch a pie, and changing the month must not re-fetch five years
@@ -203,10 +216,23 @@ def series(
     span = months_between(first_month, month_of(last_month).end)
     accounts = _accounts(db, user.household_id)
 
+    if account_id is not None:
+        accounts = [account for account in accounts if account.id == account_id]
+    elif liquid:
+        accounts = [
+            account
+            for account in accounts
+            if account.kind != AccountKind.INVESTIMENTO.value
+        ]
+
+    prices, priced_from = _price_history(db, user.household_id)
     monthly = domain.monthly_series(movements, span)
-    worth = domain.net_worth_series(balance_rows(accounts), movements, span)
+    worth = domain.net_worth_series(
+        balance_rows(accounts), movements, span, valuations=prices
+    )
 
     return SeriesOut(
+        priced_from=priced_from,
         months=[
             MonthPointOut(
                 month=point.month,
@@ -281,6 +307,36 @@ def analysis(
         ),
         pace=_pace_out(domain.pace(movements, period, on=date.today())),
     )
+
+
+def _price_history(
+    db: DbSession, household_id: int
+) -> tuple[dict[int, list[tuple[date, int]]], date | None]:
+    """Every valuation ever recorded, grouped by the account that holds it.
+
+    The whole history, not the latest: each month of the curve picks the price
+    that existed at its end, so the past cannot be redrawn with today's market.
+    """
+    rows = db.execute(
+        select(Asset.account_id, AssetValuation.date, AssetValuation.value_cents)
+        .join(AssetValuation, AssetValuation.asset_id == Asset.id)
+        .where(Asset.household_id == household_id, Asset.closed_at.is_(None))
+        .order_by(AssetValuation.date)
+    ).all()
+
+    # Several holdings can share an account, so a date's value is their sum.
+    by_account_date: dict[tuple[int, date], int] = {}
+    for account_id, when, value in rows:
+        by_account_date[(account_id, when)] = by_account_date.get((account_id, when), 0) + value
+
+    history: dict[int, list[tuple[date, int]]] = {}
+    for (account_id, when), value in by_account_date.items():
+        history.setdefault(account_id, []).append((when, value))
+    for series in history.values():
+        series.sort()
+
+    first = min((when for _, when in by_account_date), default=None)
+    return history, first
 
 
 def _requested_period(date_from: date | None, date_to: date | None) -> Period:
